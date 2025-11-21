@@ -97,11 +97,49 @@ export const useAppStore = create<AppState>((set) => ({
     }),
 
     fireCue: (id) => {
+        const state = useAppStore.getState();
+        const cue = state.cues.find(c => c.id === id);
+
+        if (!cue) {
+            console.warn(`[Store] Cue ${id} not found`);
+            return;
+        }
+
         set({ activeCueId: id });
-        // Audio and OSC triggering will be handled by subscribers or components
+        console.log(`[Store] Firing cue: ${cue.title}`);
+
+        // Import AudioEngine dynamically to avoid circular dependencies
+        import('../services/AudioEngine').then(({ AudioEngine }) => {
+            // Play audio if file path is specified
+            if (cue.audioFilePath) {
+                AudioEngine.play(cue.audioFilePath, {
+                    volume: cue.audioVolume,
+                    onEnd: () => {
+                        console.log(`[Store] Audio finished for cue: ${cue.title}`);
+                    },
+                    onError: (error) => {
+                        console.error(`[Store] Audio error for cue: ${cue.title}`, error);
+                    }
+                });
+            }
+        });
+
+        // Import OscClient dynamically to send OSC commands
+        import('../services/OscClient').then(({ getOscClient }) => {
+            const oscClient = getOscClient();
+            if (cue.oscCommand && !state.settings.simulationMode) {
+                oscClient.sendCustomCommand(cue.oscCommand);
+            }
+        });
     },
 
     stopAll: () => {
+        console.log('[Store] Stopping all playback');
         set({ activeCueId: null });
+
+        // Stop audio playback
+        import('../services/AudioEngine').then(({ AudioEngine }) => {
+            AudioEngine.stop();
+        });
     }
 }));
