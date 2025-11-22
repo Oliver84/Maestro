@@ -111,7 +111,7 @@ export class BrowserOscClient {
 
         // Log reception (skip meters to avoid spam)
         if (this.logCallback && address !== '/meters/1') {
-            this.logCallback(`Received: ${address} ${args.join(' ')}`);
+            this.logCallback(`[IN] ${address} ${args.join(' ')}`);
         }
 
         // Dynamic import to avoid circular dependency during initialization
@@ -185,7 +185,7 @@ export class BrowserOscClient {
             console.log(`[OSC Client] Sent: ${message}`);
 
             if (this.logCallback) {
-                this.logCallback(message);
+                this.logCallback(`[OUT] ${message}`);
             }
         }
     }
