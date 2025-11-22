@@ -22,7 +22,11 @@ const subscribers = new Set();
 server.on('message', (msg, rinfo) => {
     const address = msg[0];
     const args = msg.slice(1);
-    console.log(`[Mock X32] Received from ${rinfo.address}:${rinfo.port}:`, address, args);
+
+    // Skip logging for /meters to avoid spam
+    if (address !== '/meters') {
+        console.log(`[Mock X32] Received from ${rinfo.address}:${rinfo.port}:`, address, args);
+    }
 
     // Handle /xremote (Subscription)
     if (address === '/xremote') {

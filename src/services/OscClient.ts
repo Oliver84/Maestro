@@ -179,11 +179,14 @@ export class BrowserOscClient {
             window.ipcRenderer.sendOsc(address, ...args);
         }
 
-        const message = `${address} ${args.map(a => typeof a === 'number' ? a.toFixed(2) : a).join(' ')}`;
-        console.log(`[OSC Client] Sent: ${message}`);
+        // Skip logging for meters to avoid spam
+        if (address !== '/meters') {
+            const message = `${address} ${args.map(a => typeof a === 'number' ? a.toFixed(2) : a).join(' ')}`;
+            console.log(`[OSC Client] Sent: ${message}`);
 
-        if (this.logCallback) {
-            this.logCallback(message);
+            if (this.logCallback) {
+                this.logCallback(message);
+            }
         }
     }
 
