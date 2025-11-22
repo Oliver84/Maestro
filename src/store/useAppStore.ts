@@ -31,6 +31,7 @@ export interface AppSettings {
 interface AppState {
     cues: Cue[];
     activeCueId: string | null;
+    selectedCueId: string | null;
     settings: AppSettings;
     x32Channels: X32Channel[];
     selectedChannelIds: number[];
@@ -46,15 +47,22 @@ interface AppState {
     deleteCue: (id: string) => void;
     updateCue: (id: string, data: Partial<Cue>) => void;
     reorderCues: (fromIndex: number, toIndex: number) => void;
+
+    // Navigation Actions
+    selectCue: (id: string) => void;
+    selectNextCue: () => void;
+    selectPreviousCue: () => void;
+
     fireCue: (id: string) => void;
     stopAll: () => void;
 }
 
 export const useAppStore = create<AppState>()(
     persist(
-        (set) => ({
+        (set, get) => ({
             cues: [], // Initial state is empty, no mock data
             activeCueId: null,
+            selectedCueId: null, // Initialize selection
             settings: {
                 x32Ip: '192.168.1.50',
                 audioDeviceId: 'default',
@@ -91,14 +99,33 @@ export const useAppStore = create<AppState>()(
                     playbackMode: 'STOP_AND_GO', // Default mode
                     ...cueData,
                 };
-                return { cues: [...state.cues, newCue] };
+                const newCues = [...state.cues, newCue];
+                // Auto-select the first cue added if none selected
+                return {
+                    cues: newCues,
+                    selectedCueId: state.selectedCueId || newCue.id
+                };
             }),
 
             deleteCue: (id) => set((state) => {
                 const newCues = state.cues
                     .filter(c => c.id !== id)
                     .map((c, i) => ({ ...c, sequence: i + 1 })); // Re-sequence
-                return { cues: newCues };
+
+                // Handle selection if deleted cue was selected
+                let newSelectedId = state.selectedCueId;
+                if (state.selectedCueId === id) {
+                    const index = state.cues.findIndex(c => c.id === id);
+                    if (newCues.length > 0) {
+                        // Select next available, or last if at end
+                        const nextIndex = Math.min(index, newCues.length - 1);
+                        newSelectedId = newCues[nextIndex].id;
+                    } else {
+                        newSelectedId = null;
+                    }
+                }
+
+                return { cues: newCues, selectedCueId: newSelectedId };
             }),
 
             updateCue: (id, data) => set((state) => ({
@@ -113,8 +140,34 @@ export const useAppStore = create<AppState>()(
                 return { cues: newCues.map((c, i) => ({ ...c, sequence: i + 1 })) };
             }),
 
+            selectCue: (id) => set({ selectedCueId: id }),
+
+            selectNextCue: () => {
+                const { cues, selectedCueId } = get();
+                if (!selectedCueId && cues.length > 0) {
+                    set({ selectedCueId: cues[0].id });
+                    return;
+                }
+                const currentIndex = cues.findIndex(c => c.id === selectedCueId);
+                if (currentIndex !== -1 && currentIndex < cues.length - 1) {
+                    set({ selectedCueId: cues[currentIndex + 1].id });
+                }
+            },
+
+            selectPreviousCue: () => {
+                const { cues, selectedCueId } = get();
+                if (!selectedCueId && cues.length > 0) {
+                    set({ selectedCueId: cues[0].id });
+                    return;
+                }
+                const currentIndex = cues.findIndex(c => c.id === selectedCueId);
+                if (currentIndex > 0) {
+                    set({ selectedCueId: cues[currentIndex - 1].id });
+                }
+            },
+
             fireCue: (id) => {
-                const state = useAppStore.getState();
+                const state = get();
                 const cue = state.cues.find(c => c.id === id);
 
                 if (!cue) {
@@ -122,8 +175,14 @@ export const useAppStore = create<AppState>()(
                     return;
                 }
 
-                set({ activeCueId: id });
+                set({ activeCueId: id, selectedCueId: id });
                 console.log(`[Store] Firing cue: ${cue.title}`);
+
+                // Advance selection to next cue (Auto-step)
+                const currentIndex = state.cues.findIndex(c => c.id === id);
+                if (currentIndex !== -1 && currentIndex < state.cues.length - 1) {
+                    set({ selectedCueId: state.cues[currentIndex + 1].id });
+                }
 
                 // Import AudioEngine dynamically to avoid circular dependencies
                 import('../services/AudioEngine').then(({ AudioEngine }) => {
@@ -179,7 +238,7 @@ export const useAppStore = create<AppState>()(
             partialize: (state) => ({
                 cues: state.cues,
                 settings: state.settings,
-                // We don't persist activeCueId or channels/faders as those should reset or be re-fetched
+                selectedCueId: state.selectedCueId // Persist selection too
             }),
         }
     )

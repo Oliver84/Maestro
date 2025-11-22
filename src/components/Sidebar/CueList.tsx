@@ -3,7 +3,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { Music, Trash2, X, Layers, StopCircle } from 'lucide-react';
 
 export const CueList: React.FC = () => {
-    const { cues, activeCueId, fireCue, addCue, updateCue, deleteCue } = useAppStore();
+    const { cues, activeCueId, fireCue, addCue, updateCue, deleteCue, selectedCueId, selectCue } = useAppStore();
     const [isDraggingOverList, setIsDraggingOverList] = useState(false);
     const [dragOverCueId, setDragOverCueId] = useState<string | null>(null);
     const [editingCueId, setEditingCueId] = useState<string | null>(null);
@@ -119,6 +119,18 @@ export const CueList: React.FC = () => {
     // Prevent cue firing when clicking on inputs
     const stopProp = (e: React.MouseEvent) => e.stopPropagation();
 
+    // Handle Row Click: Selects the cue (for Go logic) and fires if needed (double click? or just separate selection)
+    // Standard Show Control: Click selects (Blue). Spacebar Fires (Green).
+    // But we also kept the "Click to Fire" logic in previous steps.
+    // Let's make Click -> Select. Double Click -> Fire? Or keep single click fire but update selection?
+    // The user requested "Navigate up/down... space bar to go".
+    // Usually, clicking a row should SELECT it (Next).
+    const handleRowClick = (id: string) => {
+        if (!editingCueId && !editingSnippetId && !editingSceneId) {
+            selectCue(id);
+        }
+    };
+
     return (
         <div
             className={`flex-1 overflow-y-auto transition-colors ${isDraggingOverList ? 'bg-slate-800/50 ring-2 ring-emerald-500/50' : 'bg-slate-900/30'}`}
@@ -138,7 +150,8 @@ export const CueList: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-800/50">
                     {cues.map((cue) => {
-                        const isActive = activeCueId === cue.id;
+                        const isActive = activeCueId === cue.id; // Playing
+                        const isSelected = selectedCueId === cue.id; // Selected/Next
                         const isDragTarget = dragOverCueId === cue.id;
                         const isEditingTitle = editingCueId === cue.id;
                         const isEditingSnippet = editingSnippetId === cue.id;
@@ -160,11 +173,20 @@ export const CueList: React.FC = () => {
                         return (
                             <tr
                                 key={cue.id}
-                                className={`group transition-colors cursor-pointer
-                                    ${isActive ? 'bg-slate-800/80' : 'hover:bg-slate-800/30'}
+                                // Auto-scroll to selected
+                                ref={(el) => {
+                                    if (isSelected && el) {
+                                        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                                    }
+                                }}
+                                className={`group transition-colors cursor-pointer border-l-4
+                                    ${isActive ? 'bg-emerald-900/20 border-emerald-500' :
+                                      isSelected ? 'bg-slate-800 border-blue-500' :
+                                      'hover:bg-slate-800/30 border-transparent'}
                                     ${isDragTarget ? '!bg-emerald-900/30 ring-1 ring-emerald-500/50' : ''}
                                 `}
-                                onClick={() => !isEditingTitle && !isEditingSnippet && !isEditingScene && fireCue(cue.id)}
+                                onClick={() => handleRowClick(cue.id)}
+                                onDoubleClick={() => fireCue(cue.id)}
                                 onDragOver={(e) => handleDragOverRow(e, cue.id)}
                                 onDragLeave={handleDragLeaveRow}
                                 onDrop={(e) => handleDropOnRow(e, cue.id)}

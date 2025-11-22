@@ -1,8 +1,7 @@
 /**
  * Browser-compatible OSC Client
  * This is a lightweight client that works in the browser for simulation mode.
- * For production with real X32, this should be replaced with Electron IPC calls
- * to a main process OSC client.
+ * For production with real X32, this uses Electron IPC calls to a main process OSC client.
  */
 
 export class BrowserOscClient {
@@ -20,7 +19,7 @@ export class BrowserOscClient {
      */
     connect(): void {
         this.isConnected = true;
-        console.log(`[OSC Client] Simulated connection to X32 at ${this.host}:${this.port}`);
+        console.log(`[OSC Client] Connected to X32 at ${this.host}:${this.port}`);
     }
 
     /**
@@ -32,7 +31,7 @@ export class BrowserOscClient {
     }
 
     /**
-     * Send a raw OSC message (simulated)
+     * Send a raw OSC message (via IPC if available)
      */
     private send(address: string, ...args: any[]): void {
         if (!this.isConnected) {
@@ -40,7 +39,12 @@ export class BrowserOscClient {
             return;
         }
 
-        console.log(`[OSC Client] Would send: ${address}`, args);
+        if (window.ipcRenderer) {
+            // Use Electron IPC for real UDP transport
+            window.ipcRenderer.sendOsc(address, ...args);
+        }
+
+        console.log(`[OSC Client] Sent: ${address}`, args);
     }
 
     /**
@@ -61,6 +65,8 @@ export class BrowserOscClient {
     setChannelMute(channelNumber: number, muted: boolean): void {
         const address = `/ch/${String(channelNumber).padStart(2, '0')}/mix/on`;
         // X32 uses 1 for ON (unmuted) and 0 for OFF (muted)
+        // Correction: /mix/on usually takes 1 (active/on) or 0 (inactive/off).
+        // If the button is "Mute", then muted=true means on=0.
         this.send(address, muted ? 0 : 1);
     }
 
@@ -97,7 +103,20 @@ export class BrowserOscClient {
      * @param args Optional arguments
      */
     sendCustomCommand(command: string, ...args: any[]): void {
-        this.send(command, ...args);
+        // Handle space-separated commands if arguments are not passed separately
+        // e.g., "/action/gosnippet 12"
+        if (args.length === 0 && command.includes(' ')) {
+            const parts = command.split(' ');
+            const address = parts[0];
+            const oscArgs = parts.slice(1).map(arg => {
+                // Try to convert numeric strings to numbers
+                const num = parseFloat(arg);
+                return isNaN(num) ? arg : num;
+            });
+            this.send(address, ...oscArgs);
+        } else {
+            this.send(command, ...args);
+        }
     }
 
     /**

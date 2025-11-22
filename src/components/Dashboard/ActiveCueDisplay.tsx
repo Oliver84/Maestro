@@ -22,8 +22,13 @@ export const ActiveCueDisplay: React.FC = () => {
             setIsPlaying(isAudioActive);
 
             // 1. Update Time
-            setCurrentTime(AudioEngine.getCurrentTime());
-            const d = AudioEngine.getDuration();
+            let t = AudioEngine.getCurrentTime();
+            let d = AudioEngine.getDuration();
+
+            // Clamp current time to duration if exceeding (floating point errors or loop end)
+            if (d > 0 && t > d) t = d;
+
+            setCurrentTime(t);
             if (d > 0) setDuration(d);
 
             // 2. Draw Visualizer (Frequency Bars)
@@ -48,25 +53,15 @@ export const ActiveCueDisplay: React.FC = () => {
 
                         // We'll sample the frequency data
                         const bufferLength = dataArray.length;
-                        // We want to focus on bass/mids mostly for visuals, typically lower half of FFT
                         const step = Math.floor((bufferLength / 2) / barCount);
 
                         for (let i = 0; i < barCount; i++) {
-                            // Get average amplitude for this frequency bin
                             let val = dataArray[i * step];
-                            // Scale it
                             const barHeight = (val / 255) * height * 0.8;
-
-                            // Draw Bar
                             const r = barWidth / 2;
-
-                            // Color logic
                             ctx.fillStyle = '#047857'; // emerald-700 base
-
-                            // Center vertically
                             const y = (height - barHeight) / 2;
 
-                            // Draw rounded rect
                             ctx.beginPath();
                             ctx.roundRect(x, y, barWidth, barHeight, [r]);
                             ctx.fill();

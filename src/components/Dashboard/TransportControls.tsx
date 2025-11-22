@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { Square } from 'lucide-react';
 
@@ -20,21 +20,7 @@ export const TransportControls: React.FC = () => {
         }
     };
 
-    // Global Spacebar Handler
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.code === 'Space' && !e.repeat && (e.target as HTMLElement).tagName !== 'INPUT') {
-                e.preventDefault();
-                handleGo();
-            }
-            if (e.code === 'Escape') {
-                stopAll();
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [cues, activeCueId, fireCue, stopAll]);
+    // Keyboard listeners are now handled globally in App.tsx to prevent duplicates
 
     return (
         <div className="mt-8 flex items-center gap-3">
