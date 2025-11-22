@@ -104,38 +104,91 @@ export const InlineWaveform: React.FC<InlineWaveformProps> = ({
 
             if (waveformPoints.length > 0) {
                 const barWidth = width / waveformPoints.length;
+                const barGap = barWidth * 0.25;
 
-                // Background waveform (always visible, dimmer when inactive)
-                ctx.fillStyle = isActive ? '#334155' : '#1e293b';
+                // Background waveform with gradient
+                const bgGradient = ctx.createLinearGradient(0, 0, 0, height);
+                if (isActive) {
+                    bgGradient.addColorStop(0, '#64748b');
+                    bgGradient.addColorStop(0.5, '#475569');
+                    bgGradient.addColorStop(1, '#64748b');
+                } else {
+                    bgGradient.addColorStop(0, '#334155');
+                    bgGradient.addColorStop(0.5, '#1e293b');
+                    bgGradient.addColorStop(1, '#334155');
+                }
+
                 waveformPoints.forEach((val, i) => {
-                    const x = i * barWidth;
-                    const barHeight = val * height;
+                    const x = i * barWidth + barGap / 2;
+                    const barHeight = Math.max(val * height, 2);
                     const y = (height - barHeight) / 2;
-                    ctx.fillRect(x, y, barWidth * 0.8, barHeight);
+
+                    ctx.fillStyle = bgGradient;
+                    ctx.beginPath();
+                    ctx.roundRect(x, y, barWidth - barGap, barHeight, [1.5]);
+                    ctx.fill();
                 });
 
-                // Active/progress waveform (only when playing)
+                // Active/progress waveform with gradient and glow
                 if (isActive && progress > 0) {
                     ctx.save();
                     ctx.beginPath();
                     ctx.rect(0, 0, progressX, height);
                     ctx.clip();
-                    ctx.fillStyle = '#34d399';
+
+                    // Glow effect
+                    ctx.shadowColor = '#10b981';
+                    ctx.shadowBlur = 8;
+
+                    // Gradient for active portion
+                    const activeGradient = ctx.createLinearGradient(0, 0, 0, height);
+                    activeGradient.addColorStop(0, '#34d399');
+                    activeGradient.addColorStop(0.5, '#10b981');
+                    activeGradient.addColorStop(1, '#34d399');
+
                     waveformPoints.forEach((val, i) => {
-                        const x = i * barWidth;
-                        const barHeight = val * height;
+                        const x = i * barWidth + barGap / 2;
+                        const barHeight = Math.max(val * height, 2);
                         const y = (height - barHeight) / 2;
-                        ctx.fillRect(x, y, barWidth * 0.8, barHeight);
+
+                        ctx.fillStyle = activeGradient;
+                        ctx.beginPath();
+                        ctx.roundRect(x, y, barWidth - barGap, barHeight, [1.5]);
+                        ctx.fill();
                     });
                     ctx.restore();
                 }
             } else {
-                // Simple line when no waveform
-                ctx.fillStyle = isActive ? 'rgba(51, 65, 85, 0.5)' : 'rgba(30, 41, 59, 0.5)';
-                ctx.fillRect(0, height / 2 - 1, width, 2);
+                // Simple line when no waveform with gradient
+                const lineGradient = ctx.createLinearGradient(0, 0, width, 0);
+                if (isActive) {
+                    lineGradient.addColorStop(0, 'rgba(100, 116, 139, 0.4)');
+                    lineGradient.addColorStop(0.5, 'rgba(100, 116, 139, 0.7)');
+                    lineGradient.addColorStop(1, 'rgba(100, 116, 139, 0.4)');
+                } else {
+                    lineGradient.addColorStop(0, 'rgba(51, 65, 85, 0.3)');
+                    lineGradient.addColorStop(0.5, 'rgba(51, 65, 85, 0.6)');
+                    lineGradient.addColorStop(1, 'rgba(51, 65, 85, 0.3)');
+                }
+
+                ctx.fillStyle = lineGradient;
+                ctx.beginPath();
+                ctx.roundRect(0, height / 2 - 1.5, width, 3, [1.5]);
+                ctx.fill();
+
                 if (isActive && progress > 0) {
-                    ctx.fillStyle = '#34d399';
-                    ctx.fillRect(0, height / 2 - 1, progressX, 2);
+                    // Active progress with glow
+                    ctx.shadowColor = '#10b981';
+                    ctx.shadowBlur = 6;
+
+                    const progressGradient = ctx.createLinearGradient(0, 0, progressX, 0);
+                    progressGradient.addColorStop(0, '#34d399');
+                    progressGradient.addColorStop(1, '#10b981');
+
+                    ctx.fillStyle = progressGradient;
+                    ctx.beginPath();
+                    ctx.roundRect(0, height / 2 - 1.5, progressX, 3, [1.5]);
+                    ctx.fill();
                 }
             }
 
@@ -156,20 +209,20 @@ export const InlineWaveform: React.FC<InlineWaveformProps> = ({
 
     return (
         <div className="w-full">
-            <div className="w-full h-6 bg-slate-950/50 rounded overflow-hidden relative">
+            <div className="w-full h-16 bg-slate-950/90 rounded-md overflow-hidden relative border border-slate-800/60 shadow-inner">
                 <canvas
                     ref={canvasRef}
                     width={200}
-                    height={24}
+                    height={64}
                     className="w-full h-full"
                 />
             </div>
             {/* Time display */}
-            <div className="flex justify-between items-center mt-1 text-[10px] font-mono">
-                <span className={`${isActive ? 'text-emerald-400' : 'text-slate-600'}`}>
+            <div className="flex justify-between items-center mt-1.5 text-[10px] font-mono">
+                <span className={`transition-colors ${isActive ? 'text-emerald-400 font-semibold' : 'text-slate-500'}`}>
                     {isActive ? formatTime(currentTime) : '0:00'}
                 </span>
-                <span className="text-slate-600">
+                <span className="text-slate-500">
                     {duration > 0 ? formatTime(duration) : '--:--'}
                 </span>
             </div>

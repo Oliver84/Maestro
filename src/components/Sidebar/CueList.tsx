@@ -1,4 +1,4 @@
-import React, { useState, DragEvent, useEffect } from 'react';
+import React, { useState, DragEvent, useEffect, useRef } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { Music, Trash2, X, Layers, StopCircle } from 'lucide-react';
 import { InlineWaveform } from './InlineWaveform';
@@ -12,6 +12,7 @@ export const CueList: React.FC = () => {
     const [editingSnippetId, setEditingSnippetId] = useState<string | null>(null);
     const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
     const [playingCueIds, setPlayingCueIds] = useState<Set<string>>(new Set());
+    const cueRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
 
     // Track which cues are actually playing audio
     useEffect(() => {
@@ -24,6 +25,16 @@ export const CueList: React.FC = () => {
         const animationId = requestAnimationFrame(updatePlayingCues);
         return () => cancelAnimationFrame(animationId);
     }, []);
+
+    // Auto-scroll to selected cue
+    useEffect(() => {
+        if (selectedCueId) {
+            const element = cueRefs.current.get(selectedCueId);
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+    }, [selectedCueId]);
 
 
     const handleDragOverList = (e: DragEvent<HTMLDivElement>) => {
@@ -157,11 +168,11 @@ export const CueList: React.FC = () => {
             <table className="w-full text-left border-collapse">
                 <thead className="bg-slate-950 text-xs font-bold text-slate-500 uppercase tracking-wider sticky top-0 z-10 shadow-sm">
                     <tr>
-                        <th className="px-6 py-4 border-b border-slate-800 w-20">Cue #</th>
-                        <th className="px-6 py-4 border-b border-slate-800">Description</th>
-                        <th className="px-6 py-4 border-b border-slate-800 w-32">Snippet</th>
-                        <th className="px-6 py-4 border-b border-slate-800 w-32 text-right">Type</th>
-                        <th className="px-6 py-4 border-b border-slate-800 w-24 text-right">Actions</th>
+                        <th className="px-4 py-3 border-b border-slate-800 w-16 text-center">#</th>
+                        <th className="px-6 py-3 border-b border-slate-800">Description</th>
+                        <th className="px-6 py-3 border-b border-slate-800 w-32">Snippet</th>
+                        <th className="px-6 py-3 border-b border-slate-800 w-32 text-right">Type</th>
+                        <th className="px-6 py-3 border-b border-slate-800 w-24 text-right">Actions</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/50">
@@ -191,17 +202,18 @@ export const CueList: React.FC = () => {
                         return (
                             <tr
                                 key={cue.id}
-                                // Auto-scroll to selected
                                 ref={(el) => {
-                                    if (isSelected && el) {
-                                        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                                    if (el) {
+                                        cueRefs.current.set(cue.id, el);
+                                    } else {
+                                        cueRefs.current.delete(cue.id);
                                     }
                                 }}
-                                className={`group transition-colors cursor-pointer border-l-4
-                                    ${isActive ? 'bg-emerald-900/20 border-emerald-500' :
-                                        isSelected ? 'bg-slate-800 border-blue-500' :
-                                            'hover:bg-slate-800/30 border-transparent'}
-                                    ${isDragTarget ? '!bg-emerald-900/30 ring-1 ring-emerald-500/50' : ''}
+                                className={`group transition-all cursor-pointer border-l-4 duration-200
+                                    ${isActive ? 'bg-emerald-900/30 border-emerald-500 shadow-lg shadow-emerald-500/10' :
+                                        isSelected ? 'bg-blue-900/20 border-blue-500' :
+                                            'hover:bg-slate-800/40 border-transparent'}
+                                    ${isDragTarget ? '!bg-emerald-900/30 ring-2 ring-emerald-500/50' : ''}
                                 `}
                                 onClick={() => handleRowClick(cue.id)}
                                 onDoubleClick={() => fireCue(cue.id)}
@@ -209,8 +221,8 @@ export const CueList: React.FC = () => {
                                 onDragLeave={handleDragLeaveRow}
                                 onDrop={(e) => handleDropOnRow(e, cue.id)}
                             >
-                                <td className="px-6 py-4 font-mono text-slate-400 group-hover:text-slate-200 text-lg">
-                                    CUE {cue.sequence}
+                                <td className="px-4 py-5 font-mono text-slate-400 group-hover:text-amber-400 text-2xl font-black text-center transition-colors">
+                                    {cue.sequence}
                                 </td>
                                 <td className="px-6 py-4" onClick={stopProp}>
                                     {isEditingTitle ? (
@@ -226,7 +238,7 @@ export const CueList: React.FC = () => {
                                         />
                                     ) : (
                                         <div
-                                            className={`font-bold text-lg cursor-text hover:text-emerald-400 transition-colors ${isActive ? 'text-white' : 'text-slate-200'}`}
+                                            className={`font-bold text-xl cursor-text hover:text-emerald-400 transition-colors leading-tight ${isActive ? 'text-white' : 'text-slate-100'}`}
                                             onClick={() => setEditingCueId(cue.id)}
                                             title="Click to edit title"
                                         >
@@ -235,7 +247,7 @@ export const CueList: React.FC = () => {
                                     )}
                                     <div className="flex flex-col gap-1 mt-1">
                                         {/* Scene Name Edit */}
-                                        <div className="text-xs text-slate-500 cursor-text hover:text-emerald-400" onClick={() => setEditingSceneId(cue.id)}>
+                                        <div className="text-xs text-slate-400 cursor-text hover:text-emerald-400 italic" onClick={() => setEditingSceneId(cue.id)}>
                                             {isEditingScene ? (
                                                 <input
                                                     autoFocus
@@ -254,8 +266,8 @@ export const CueList: React.FC = () => {
                                         {/* Controls Row: Audio Filename + Playback Mode */}
                                         <div className="flex items-center gap-3 flex-wrap mt-1">
                                             {cue.audioFilePath && (
-                                                <div className="flex items-center gap-1 text-xs text-emerald-400/80 font-mono bg-emerald-900/20 px-1.5 py-0.5 rounded w-fit">
-                                                    <Music size={10} />
+                                                <div className="flex items-center gap-1 text-xs text-emerald-300/70 font-mono bg-emerald-950/30 px-2 py-0.5 rounded-md border border-emerald-900/30 w-fit">
+                                                    <Music size={11} />
                                                     <span className="truncate max-w-[200px]" title={cue.audioFilePath}>
                                                         {getFilename(cue.audioFilePath)}
                                                     </span>
@@ -264,18 +276,18 @@ export const CueList: React.FC = () => {
 
                                             {/* Playback Mode Indicator - Always Visible */}
                                             <button
-                                                className={`text-[10px] flex items-center gap-1 px-1.5 py-0.5 rounded border transition-colors ${isOverlap ? 'border-blue-500/30 text-blue-300 bg-blue-500/10 hover:bg-blue-500/20' : 'border-slate-600 text-slate-400 bg-slate-800 hover:bg-slate-700'}`}
+                                                className={`text-[10px] flex items-center gap-1 px-2 py-0.5 rounded-md border transition-colors font-semibold ${isOverlap ? 'border-blue-500/40 text-blue-300 bg-blue-500/15 hover:bg-blue-500/25' : 'border-slate-700 text-slate-400 bg-slate-800/50 hover:bg-slate-700'}`}
                                                 onClick={(e) => togglePlaybackMode(e, cue.id, cue.playbackMode)}
                                                 title={isOverlap ? "Mode: Overlap (Plays on top)" : "Mode: Stop & Go (Stops previous audio)"}
                                             >
-                                                {isOverlap ? <Layers size={10} /> : <StopCircle size={10} />}
+                                                {isOverlap ? <Layers size={11} /> : <StopCircle size={11} />}
                                                 <span>{isOverlap ? 'LAYER' : 'STOP & GO'}</span>
                                             </button>
                                         </div>
 
                                         {/* Inline Waveform Progress - Always shown if audio file exists */}
                                         {cue.audioFilePath && (
-                                            <div className="mt-2">
+                                            <div className="mt-3">
                                                 <InlineWaveform
                                                     cueId={cue.id}
                                                     audioFilePath={cue.audioFilePath}
@@ -309,8 +321,8 @@ export const CueList: React.FC = () => {
                                         </div>
                                     )}
                                 </td>
-                                <td className="px-6 py-4 text-right">
-                                    <span className={`text-[10px] font-bold px-2 py-1 rounded border ${typeColor}`}>
+                                <td className="px-6 py-5 text-right">
+                                    <span className={`text-[11px] font-bold px-2.5 py-1 rounded-md border ${typeColor}`}>
                                         {type}
                                     </span>
                                 </td>
