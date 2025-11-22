@@ -1,5 +1,6 @@
 import React from 'react';
 import { Plus } from 'lucide-react';
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useAppStore } from '../../store/useAppStore';
 import { CueList } from './CueList';
 import { QuickMix } from './QuickMix';
@@ -28,8 +29,17 @@ export const Sidebar: React.FC = () => {
                     <Plus size={18} />
                 </button>
             </div>
-            <CueList />
-            <QuickMix />
+            <PanelGroup direction="vertical" className="flex-1">
+                <Panel defaultSize={70} minSize={30}>
+                    <div className="h-full overflow-hidden">
+                        <CueList />
+                    </div>
+                </Panel>
+                <PanelResizeHandle className="h-1 bg-slate-800 hover:bg-emerald-500/50 transition-colors cursor-row-resize" />
+                <Panel defaultSize={30} minSize={15} maxSize={50}>
+                    <QuickMix />
+                </Panel>
+            </PanelGroup>
         </div>
     );
 };

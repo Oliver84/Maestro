@@ -81,16 +81,53 @@ export const InlineWaveform: React.FC<InlineWaveformProps> = ({
         }
     }, [audioFilePath, cueId, processedPath]);
 
+    // Set up canvas resolution based on container size
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const updateCanvasSize = () => {
+            const rect = canvas.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            const newWidth = rect.width * dpr;
+            const newHeight = rect.height * dpr;
+
+            // Only update if size actually changed to prevent flickering
+            if (canvas.width !== newWidth || canvas.height !== newHeight) {
+                canvas.width = newWidth;
+                canvas.height = newHeight;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.scale(dpr, dpr);
+                }
+            }
+        };
+
+        updateCanvasSize();
+
+        const resizeObserver = new ResizeObserver(() => {
+            updateCanvasSize();
+        });
+        resizeObserver.observe(canvas);
+
+        return () => {
+            resizeObserver.disconnect();
+        };
+    }, []);
+
     // Drawing loop - always runs to update time and progress
     useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
         const draw = () => {
-            const canvas = canvasRef.current;
-            if (!canvas) return;
             const ctx = canvas.getContext('2d');
             if (!ctx) return;
 
-            const width = canvas.width;
-            const height = canvas.height;
+            const rect = canvas.getBoundingClientRect();
+            const width = rect.width;
+            const height = rect.height;
+
             ctx.clearRect(0, 0, width, height);
 
             // Update time from AudioEngine if active
@@ -181,8 +218,6 @@ export const InlineWaveform: React.FC<InlineWaveformProps> = ({
             <div className="w-full h-16 relative">
                 <canvas
                     ref={canvasRef}
-                    width={200}
-                    height={64}
                     className="w-full h-full"
                 />
             </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Settings, Wifi } from 'lucide-react'
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import { Dashboard } from './components/Dashboard/Dashboard'
 import { Sidebar } from './components/Sidebar/Sidebar'
 import { SettingsModal } from './components/Settings/SettingsModal'
@@ -8,7 +9,7 @@ import { initializeMockChannels } from './utils/mockData'
 
 function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const { settings, selectNextCue, selectPreviousCue, fireCue, selectedCueId, activeCueId, cues } = useAppStore()
+  const { settings, selectNextCue, selectPreviousCue, fireCue, selectedCueId } = useAppStore()
 
   // Initialize mock channels (but NOT cues) for simulation mode
   useEffect(() => {
@@ -115,20 +116,29 @@ function App() {
         </div>
       </header>
 
-      {/* Main Content Area */}
+      {/* Main Content Area with Resizable Panels */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Panel: Dashboard (Current/Next/Go) */}
-        <div className="w-[480px] border-r border-slate-800 flex flex-col bg-slate-950 relative z-10 shadow-2xl">
-          <Dashboard />
-        </div>
+        <PanelGroup direction="horizontal">
+          {/* Left Panel: Dashboard (Current/Next/Go) */}
+          <Panel defaultSize={30} minSize={20} maxSize={50}>
+            <div className="h-full border-r border-slate-800 flex flex-col bg-slate-950 relative z-10 shadow-2xl">
+              <Dashboard />
+            </div>
+          </Panel>
 
-        {/* Right Panel: Cue List */}
-        <div className="flex-1 flex flex-col bg-slate-900/50 min-w-0">
-          <Sidebar />
-        </div>
+          {/* Resize Handle */}
+          <PanelResizeHandle className="w-1 bg-slate-800 hover:bg-emerald-500/50 transition-colors cursor-col-resize" />
+
+          {/* Right Panel: Cue List */}
+          <Panel defaultSize={70} minSize={50}>
+            <div className="h-full flex flex-col bg-slate-900/50 min-w-0">
+              <Sidebar />
+            </div>
+          </Panel>
+        </PanelGroup>
       </div>
 
-      {/* Footer */}
+      {/* Footer - Fixed Height */}
       <footer className="h-8 bg-slate-950 border-t border-slate-800 flex items-center justify-between px-4 text-xs font-mono text-slate-500 shrink-0">
         <div className="flex items-center gap-4">
           <span>MODE: <span className="text-slate-300">SIMULATION</span></span>

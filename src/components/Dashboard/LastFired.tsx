@@ -19,7 +19,7 @@ export const LastFired: React.FC = () => {
     }, [logs]);
 
     return (
-        <div className="mt-2 border-t border-slate-800 pt-4 flex flex-col gap-2">
+        <div className="h-full flex flex-col gap-2">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <Terminal size={12} className="text-slate-500" />
@@ -36,7 +36,7 @@ export const LastFired: React.FC = () => {
                 )}
             </div>
 
-            <div className="bg-slate-950/50 rounded-lg border border-slate-800 h-32 relative flex flex-col">
+            <div className="bg-slate-950/50 rounded-lg border border-slate-800 flex-1 relative flex flex-col min-h-0">
                 <div
                     ref={scrollRef}
                     className="absolute inset-0 overflow-y-auto p-2 flex flex-col"

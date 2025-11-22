@@ -188,7 +188,7 @@ export const CueList: React.FC = () => {
 
     return (
         <div
-            className={`flex-1 overflow-y-auto transition-colors ${isDraggingOverList ? 'bg-slate-800/50 ring-2 ring-emerald-500/50' : 'bg-slate-900/30'}`}
+            className={`h-full overflow-y-auto transition-colors ${isDraggingOverList ? 'bg-slate-800/50 ring-2 ring-emerald-500/50' : 'bg-slate-900/30'}`}
             onDragOver={handleDragOverList}
             onDragLeave={handleDragLeaveList}
             onDrop={handleDropOnList}
@@ -196,11 +196,8 @@ export const CueList: React.FC = () => {
             <table className="w-full text-left border-collapse">
                 <thead className="bg-slate-950 text-xs font-bold text-slate-500 uppercase tracking-wider sticky top-0 z-10 shadow-sm">
                     <tr>
-                        <th className="px-4 py-3 border-b border-slate-800 w-16 text-center">#</th>
-                        <th className="px-6 py-3 border-b border-slate-800">Description</th>
-                        <th className="px-6 py-3 border-b border-slate-800 w-32">Snippet</th>
-                        <th className="px-6 py-3 border-b border-slate-800 w-32 text-right">Type</th>
-                        <th className="px-6 py-3 border-b border-slate-800 w-24 text-right">Actions</th>
+                        <th className="px-3 py-2 border-b border-slate-800 w-12 text-center">#</th>
+                        <th className="px-4 py-2 border-b border-slate-800">Description</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/50">
@@ -250,14 +247,14 @@ export const CueList: React.FC = () => {
                                 onDragLeave={handleDragLeaveRow}
                                 onDrop={(e) => handleDropOnRow(e, cue.id)}
                             >
-                                <td className="px-4 py-5 font-mono text-slate-400 group-hover:text-amber-400 text-2xl font-black text-center transition-colors">
+                                <td className="px-3 py-2 font-mono text-slate-400 group-hover:text-amber-400 text-xl font-black text-center transition-colors">
                                     {cue.sequence}
                                 </td>
-                                <td className="px-6 py-4" onClick={stopProp}>
+                                <td className="px-4 py-2" onClick={stopProp}>
                                     {isEditingTitle ? (
                                         <input
                                             autoFocus
-                                            className="bg-slate-950 text-white font-bold text-lg px-2 py-1 rounded border border-emerald-500 outline-none w-full"
+                                            className="bg-slate-950 text-white font-bold text-base px-2 py-0.5 rounded border border-emerald-500 outline-none w-full"
                                             value={cue.title}
                                             onChange={(e) => updateCue(cue.id, { title: e.target.value })}
                                             onBlur={() => setEditingCueId(null)}
@@ -267,14 +264,14 @@ export const CueList: React.FC = () => {
                                         />
                                     ) : (
                                         <div
-                                            className={`font-bold text-xl cursor-text hover:text-emerald-400 transition-colors leading-tight ${isActive ? 'text-white' : 'text-slate-100'}`}
+                                            className={`font-bold text-base cursor-text hover:text-emerald-400 transition-colors leading-tight ${isActive ? 'text-white' : 'text-slate-100'}`}
                                             onClick={() => setEditingCueId(cue.id)}
                                             title="Click to edit title"
                                         >
                                             {cue.title}
                                         </div>
                                     )}
-                                    <div className="flex flex-col gap-1 mt-1">
+                                    <div className="flex flex-col gap-0.5 mt-0.5">
                                         {/* Scene Name Edit */}
                                         <div className="text-xs text-slate-400 cursor-text hover:text-emerald-400 italic" onClick={() => setEditingSceneId(cue.id)}>
                                             {isEditingScene ? (
@@ -292,8 +289,9 @@ export const CueList: React.FC = () => {
                                             )}
                                         </div>
 
-                                        {/* Controls Row: Audio Filename + Playback Mode */}
-                                        <div className="flex items-center gap-3 flex-wrap mt-1">
+                                        {/* Controls Row: Audio Filename + Playback Mode + Snippet + Type + Actions */}
+                                        <div className="flex items-center justify-between gap-2 mt-0.5">
+                                            {/* Left: Audio Filename */}
                                             {cue.audioFilePath && (
                                                 <div className="flex items-center gap-1 text-xs text-emerald-300/70 font-mono bg-emerald-950/30 px-2 py-0.5 rounded-md border border-emerald-900/30 w-fit">
                                                     <Music size={11} />
@@ -303,20 +301,82 @@ export const CueList: React.FC = () => {
                                                 </div>
                                             )}
 
-                                            {/* Playback Mode Indicator - Always Visible */}
-                                            <button
-                                                className={`text-[10px] flex items-center gap-1 px-2 py-0.5 rounded-md border transition-colors font-semibold ${isOverlap ? 'border-blue-500/40 text-blue-300 bg-blue-500/15 hover:bg-blue-500/25' : 'border-slate-700 text-slate-400 bg-slate-800/50 hover:bg-slate-700'}`}
-                                                onClick={(e) => togglePlaybackMode(e, cue.id, cue.playbackMode)}
-                                                title={isOverlap ? "Mode: Overlap (Plays on top)" : "Mode: Stop & Go (Stops previous audio)"}
-                                            >
-                                                {isOverlap ? <Layers size={11} /> : <StopCircle size={11} />}
-                                                <span>{isOverlap ? 'LAYER' : 'STOP & GO'}</span>
-                                            </button>
+                                            {/* Right: All Pills with Fixed Widths */}
+                                            <div className="flex items-center gap-1.5 ml-auto">
+                                                {/* Playback Mode Indicator */}
+                                                <button
+                                                    className={`text-[10px] flex items-center gap-1 px-2 py-0.5 rounded-md border transition-colors font-semibold w-[90px] justify-center ${isOverlap ? 'border-blue-500/40 text-blue-300 bg-blue-500/15 hover:bg-blue-500/25' : 'border-slate-700 text-slate-400 bg-slate-800/50 hover:bg-slate-700'}`}
+                                                    onClick={(e) => togglePlaybackMode(e, cue.id, cue.playbackMode)}
+                                                    title={isOverlap ? "Mode: Overlap (Plays on top)" : "Mode: Stop & Go (Stops previous audio)"}
+                                                >
+                                                    {isOverlap ? <Layers size={11} /> : <StopCircle size={11} />}
+                                                    <span>{isOverlap ? 'LAYER' : 'STOP & GO'}</span>
+                                                </button>
+
+                                                {/* Snippet - Inline */}
+                                                {isEditingSnippet ? (
+                                                    <input
+                                                        autoFocus
+                                                        type="number"
+                                                        className="bg-slate-950 text-white px-2 py-0.5 rounded border border-emerald-500 outline-none w-12 text-xs text-center"
+                                                        placeholder="#"
+                                                        value={cue.snippetId ?? ''}
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            updateCue(cue.id, { snippetId: val === '' ? null : parseInt(val) });
+                                                        }}
+                                                        onBlur={() => setEditingSnippetId(null)}
+                                                        onKeyDown={(e) => { if (e.key === 'Enter') setEditingSnippetId(null); }}
+                                                    />
+                                                ) : (
+                                                    <div
+                                                        className="text-xs text-slate-400 italic cursor-text hover:text-emerald-400 border border-transparent hover:border-slate-700 rounded px-2 py-0.5 w-12 text-center"
+                                                        onClick={() => setEditingSnippetId(cue.id)}
+                                                        title="Snippet ID"
+                                                    >
+                                                        {cue.snippetId !== null && cue.snippetId !== undefined ? `#${cue.snippetId}` : '-'}
+                                                    </div>
+                                                )}
+
+                                                {/* Type Badge */}
+                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${typeColor} w-[60px] text-center`}>
+                                                    {type}
+                                                </span>
+
+                                                {/* Actions - Inline */}
+                                                <div className="flex items-center gap-1">
+                                                    <div className="relative flex items-center">
+                                                        <button
+                                                            className={`p-1.5 rounded-md transition-colors ${cue.audioFilePath ? 'text-emerald-400 hover:bg-emerald-500/20' : 'text-slate-500 hover:text-slate-200 hover:bg-slate-700'}`}
+                                                            onClick={(e) => handleAudioSelect(e, cue.id)}
+                                                            title={cue.audioFilePath ? "Change audio file" : "Add audio file"}
+                                                        >
+                                                            <Music size={14} />
+                                                        </button>
+                                                        {cue.audioFilePath && (
+                                                            <button
+                                                                className="absolute -top-0.5 -right-0.5 bg-slate-900 text-slate-400 hover:text-red-400 rounded-full p-0.5 border border-slate-700"
+                                                                onClick={(e) => handleRemoveAudio(e, cue.id)}
+                                                                title="Remove audio"
+                                                            >
+                                                                <X size={8} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    <button
+                                                        className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-900/20 rounded-md transition-colors"
+                                                        onClick={(e) => handleDelete(e, cue.id)}
+                                                        title="Delete cue"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
 
                                         {/* Inline Waveform Progress - Always shown if audio file exists */}
                                         {cue.audioFilePath && (
-                                            <div className="mt-3">
+                                            <div className="mt-1.5">
                                                 <InlineWaveform
                                                     cueId={cue.id}
                                                     audioFilePath={cue.audioFilePath}
@@ -324,64 +384,6 @@ export const CueList: React.FC = () => {
                                                 />
                                             </div>
                                         )}
-                                    </div>
-                                </td>
-                                <td className="px-6 py-4 text-sm text-slate-400 italic font-serif" onClick={stopProp}>
-                                    {isEditingSnippet ? (
-                                        <input
-                                            autoFocus
-                                            type="number"
-                                            className="bg-slate-950 text-white px-2 py-1 rounded border border-emerald-500 outline-none w-20"
-                                            placeholder="#"
-                                            value={cue.snippetId ?? ''}
-                                            onChange={(e) => {
-                                                const val = e.target.value;
-                                                updateCue(cue.id, { snippetId: val === '' ? null : parseInt(val) });
-                                            }}
-                                            onBlur={() => setEditingSnippetId(null)}
-                                            onKeyDown={(e) => { if (e.key === 'Enter') setEditingSnippetId(null); }}
-                                        />
-                                    ) : (
-                                        <div
-                                            className="cursor-text hover:text-emerald-400 border border-transparent hover:border-slate-700 rounded px-2 py-1"
-                                            onClick={() => setEditingSnippetId(cue.id)}
-                                        >
-                                            {cue.snippetId !== null && cue.snippetId !== undefined ? `Snippet ${cue.snippetId}` : '-'}
-                                        </div>
-                                    )}
-                                </td>
-                                <td className="px-6 py-5 text-right">
-                                    <span className={`text-[11px] font-bold px-2.5 py-1 rounded-md border ${typeColor}`}>
-                                        {type}
-                                    </span>
-                                </td>
-                                <td className="px-6 py-4 text-right">
-                                    <div className="flex items-center justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <div className="relative flex items-center">
-                                            <button
-                                                className={`p-2 rounded-md transition-colors ${cue.audioFilePath ? 'text-emerald-400 hover:bg-emerald-500/20' : 'text-slate-500 hover:text-slate-200 hover:bg-slate-700'}`}
-                                                onClick={(e) => handleAudioSelect(e, cue.id)}
-                                                title={cue.audioFilePath ? "Change audio file" : "Add audio file"}
-                                            >
-                                                <Music size={16} />
-                                            </button>
-                                            {cue.audioFilePath && (
-                                                <button
-                                                    className="absolute -top-1 -right-1 bg-slate-900 text-slate-400 hover:text-red-400 rounded-full p-0.5 border border-slate-700"
-                                                    onClick={(e) => handleRemoveAudio(e, cue.id)}
-                                                    title="Remove audio"
-                                                >
-                                                    <X size={10} />
-                                                </button>
-                                            )}
-                                        </div>
-                                        <button
-                                            className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-900/20 rounded-md transition-colors"
-                                            onClick={(e) => handleDelete(e, cue.id)}
-                                            title="Delete cue"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
                                     </div>
                                 </td>
                             </tr>
