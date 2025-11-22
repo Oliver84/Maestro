@@ -39,6 +39,7 @@ interface AppState {
     updateChannelFader: (channelNumber: number, level: number) => void;
     updateChannelMute: (channelNumber: number, muted: boolean) => void;
     addCue: (cue: Omit<Cue, 'id' | 'sequence'>) => void;
+    deleteCue: (id: string) => void;
     updateCue: (id: string, data: Partial<Cue>) => void;
     reorderCues: (fromIndex: number, toIndex: number) => void;
     fireCue: (id: string) => void;
@@ -82,6 +83,13 @@ export const useAppStore = create<AppState>((set) => ({
             ...cueData,
         };
         return { cues: [...state.cues, newCue] };
+    }),
+
+    deleteCue: (id) => set((state) => {
+        const newCues = state.cues
+            .filter(c => c.id !== id)
+            .map((c, i) => ({ ...c, sequence: i + 1 })); // Re-sequence
+        return { cues: newCues };
     }),
 
     updateCue: (id, data) => set((state) => ({

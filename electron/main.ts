@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { Client } from 'node-osc'
@@ -51,6 +51,21 @@ function createWindow() {
     win.loadFile(path.join(RENDERER_DIST, 'index.html'))
   }
 }
+
+// File Dialog IPC Handler
+ipcMain.handle('open-file-dialog', async () => {
+  if (!win) return null;
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    properties: ['openFile'],
+    filters: [
+      { name: 'Audio', extensions: ['mp3', 'wav', 'aac', 'm4a', 'aiff', 'flac', 'ogg'] }
+    ]
+  });
+  if (canceled || filePaths.length === 0) {
+    return null;
+  }
+  return filePaths[0];
+});
 
 // OSC IPC Handlers
 ipcMain.on('set-x32-ip', (_, ip: string) => {
