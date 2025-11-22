@@ -206,7 +206,6 @@ export const CueList: React.FC = () => {
                         const isSelected = selectedCueId === cue.id; // Selected/Next
                         const isDragTarget = dragOverCueId === cue.id;
                         const isEditingTitle = editingCueId === cue.id;
-                        const isEditingSnippet = editingSnippetId === cue.id;
                         const isEditingScene = editingSceneId === cue.id;
 
                         // Logic for type display
