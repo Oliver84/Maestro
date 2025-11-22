@@ -10,10 +10,19 @@ export class BrowserOscClient {
     private isConnected: boolean = false;
     private simulationMode: boolean = false;
     private logCallback: ((msg: string) => void) | null = null;
+    private heartbeatInterval: any = null;
+    private meterInterval: any = null;
 
     constructor(host: string = '192.168.1.50', port: number = 10023) {
         this.host = host;
         this.port = port;
+
+        // Setup Listener for Incoming OSC Messages
+        if (window.ipcRenderer) {
+            window.ipcRenderer.on('osc-message', (event: any, msg: any[]) => {
+                this.handleOscMessage(msg);
+            });
+        }
     }
 
     setSimulationMode(enabled: boolean) {
@@ -30,6 +39,9 @@ export class BrowserOscClient {
     connect(): void {
         this.isConnected = true;
         console.log(`[OSC Client] Connected to X32 at ${this.host}:${this.port}`);
+        this.startHeartbeat();
+        this.startMeterPolling();
+        this.syncFromConsole();
     }
 
     /**
@@ -37,7 +49,118 @@ export class BrowserOscClient {
      */
     disconnect(): void {
         this.isConnected = false;
+        if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
+        }
+        if (this.meterInterval) {
+            clearInterval(this.meterInterval);
+            this.meterInterval = null;
+        }
         console.log('[OSC Client] Disconnected from X32');
+    }
+
+    /**
+     * Start sending /xremote every 9 seconds to keep subscription alive
+     */
+    private startHeartbeat() {
+        if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
+
+        // Send immediately
+        this.send('/xremote');
+
+        // Then every 9 seconds
+        this.heartbeatInterval = setInterval(() => {
+            if (this.isConnected) {
+                this.send('/xremote');
+            }
+        }, 9000);
+    }
+
+    /**
+     * Poll meters every 100ms
+     */
+    private startMeterPolling() {
+        if (this.meterInterval) clearInterval(this.meterInterval);
+
+        this.meterInterval = setInterval(() => {
+            if (this.isConnected) {
+                // Request meters for Input Channels (block 1)
+                this.send('/meters', '/meters/1');
+            }
+        }, 100);
+    }
+
+    /**
+     * Request initial state from console
+     */
+    private syncFromConsole() {
+        // Send /xremote again just in case
+        this.send('/xremote');
+
+        // We could loop through channels, but /xremote usually triggers a dump or we can listen to changes.
+        // For now, we'll rely on the heartbeat keeping us subscribed.
+        console.log('[OSC Client] Synced (subscribed) to console updates');
+    }
+
+    /**
+     * Handle incoming OSC messages
+     */
+    private handleOscMessage(msg: any[]) {
+        const [address, ...args] = msg;
+
+        // Log reception (skip meters to avoid spam)
+        if (this.logCallback && address !== '/meters/1') {
+            this.logCallback(`Received: ${address} ${args.join(' ')}`);
+        }
+
+        // Dynamic import to avoid circular dependency during initialization
+        import('../store/useAppStore').then(({ useAppStore }) => {
+            const store = useAppStore.getState();
+
+            // Parse Meters: /meters/1 <blob>
+            if (address === '/meters/1' && args.length > 0) {
+                const blob = args[0];
+                if (blob instanceof Uint8Array || Buffer.isBuffer(blob)) {
+                    const floatArray = new Float32Array(blob.buffer, blob.byteOffset, blob.byteLength / 4);
+                    // Convert to array
+                    const levels = Array.from(floatArray);
+                    store.updateBulkChannelMeters(levels);
+                }
+                return;
+            }
+
+            // Parse Channel Fader: /ch/01/mix/fader <value>
+            const faderMatch = typeof address === 'string' ? address.match(/^\/ch\/(\d+)\/mix\/fader$/) : null;
+            if (faderMatch) {
+                const channelNum = parseInt(faderMatch[1], 10);
+                const value = args[0] as number;
+                store.updateChannelFromOsc(channelNum, 'fader', value);
+                return;
+            }
+
+            // Parse Channel Mute: /ch/01/mix/on <value>
+            const muteMatch = typeof address === 'string' ? address.match(/^\/ch\/(\d+)\/mix\/on$/) : null;
+            if (muteMatch) {
+                const channelNum = parseInt(muteMatch[1], 10);
+                const value = args[0] as number;
+                // value 0 = muted (OFF), 1 = unmuted (ON)
+                // But updateChannelFromOsc expects 'muted' boolean where true = muted
+                // so if value is 0 (OFF), muted is true.
+                // if value is 1 (ON), muted is false.
+                store.updateChannelFromOsc(channelNum, 'mute', value === 0);
+                return;
+            }
+
+             // Parse Channel Name: /ch/01/config/name <value>
+             const nameMatch = typeof address === 'string' ? address.match(/^\/ch\/(\d+)\/config\/name$/) : null;
+             if (nameMatch) {
+                 const channelNum = parseInt(nameMatch[1], 10);
+                 const value = args[0] as string;
+                 store.updateChannelFromOsc(channelNum, 'name', value);
+                 return;
+             }
+        });
     }
 
     /**
@@ -49,7 +172,9 @@ export class BrowserOscClient {
             return;
         }
 
-        if (window.ipcRenderer && !this.simulationMode) {
+        // Always use IPC if available, regardless of "simulationMode" flag logic used for other things.
+        // If we are in Electron, we want to use the main process socket.
+        if (window.ipcRenderer) {
             // Use Electron IPC for real UDP transport
             window.ipcRenderer.sendOsc(address, ...args);
         }

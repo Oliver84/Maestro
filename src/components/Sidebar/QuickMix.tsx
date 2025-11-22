@@ -5,7 +5,7 @@ import { getOscClient } from '../../services/OscClient';
 import { throttle } from '../../utils/throttle';
 
 export const QuickMix: React.FC = () => {
-  const { x32Channels, selectedChannelIds, settings, updateChannelFader, updateChannelMute } = useAppStore();
+  const { x32Channels, selectedChannelIds, settings, channelMeters, updateChannelFader, updateChannelMute } = useAppStore();
   const [dragging, setDragging] = useState<number | null>(null);
   const faderRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
   const oscClient = useMemo(() => getOscClient(), []);
@@ -129,33 +129,60 @@ export const QuickMix: React.FC = () => {
               {channel.faderLevel.toFixed(2)}
             </div>
 
-            {/* Fader track container */}
-            <div
-              ref={el => faderRefs.current[channel.number] = el}
-              className="relative w-12 h-24 bg-slate-900/80 rounded border border-slate-800 shadow-inner cursor-pointer select-none overflow-hidden"
-              onMouseDown={(e) => handleMouseDown(channel.number, e)}
-            >
-              {/* Fill */}
+            {/* Fader + Meter Container */}
+            <div className="flex gap-1">
+              {/* Meter */}
+              <div className="w-2 h-24 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                <div
+                  className="w-full bg-gradient-to-t from-green-500 via-yellow-500 to-red-500 transition-all duration-75 ease-linear"
+                  style={{
+                    height: `${Math.min((channelMeters[channel.number] || 0) * 100, 100)}%`,
+                    marginTop: `${100 - Math.min((channelMeters[channel.number] || 0) * 100, 100)}%`
+                  }}
+                />
+              </div>
+
+              {/* Fader track container */}
               <div
-                className={`absolute bottom-0 left-0 right-0 rounded ${channel.muted
-                  ? 'bg-slate-700/50'
-                  : 'bg-gradient-to-t from-emerald-500 to-emerald-400'
-                  }`}
-                style={{
-                  height: `${Math.max(channel.faderLevel * 100, 0)}%`,
-                }}
-              />
+                ref={el => faderRefs.current[channel.number] = el}
+                className="relative w-9 h-24 bg-slate-900/80 rounded border border-slate-800 shadow-inner cursor-pointer select-none overflow-hidden"
+                onMouseDown={(e) => handleMouseDown(channel.number, e)}
+              >
+                {/* Fill */}
+                <div
+                  className={`absolute bottom-0 left-0 right-0 rounded ${channel.muted
+                    ? 'bg-slate-700/50'
+                    : 'bg-gradient-to-t from-emerald-500 to-emerald-400'
+                    }`}
+                  style={{
+                    height: `${Math.max(channel.faderLevel * 100, 0)}%`,
+                  }}
+                />
+              </div>
             </div>
 
             {/* Draggable slider handle - overlay */}
+            {/* Adjusted width and margin to match the thinner fader track inside the flex container */}
             <div className="relative w-12 h-24 -mt-24 pointer-events-none mb-3">
+               {/*
+                  The container above is flex with gap-1.
+                  Meter is w-2 (8px) + gap-1 (4px) + Fader w-9 (36px) = 48px total width approx.
+                  We need to align the handle over the fader (the right element).
+                  Let's just center it relative to the parent (which is the flex column).
+                  Actually, it's tricky with the flex layout.
+                  Simpler: Make the handle relative to the fader track only?
+                  No, the current structure has the handle outside.
+                  Let's move the handle logic into the Fader Track container?
+                  Or just offset it.
+               */}
               <div
-                className={`absolute left-1/2 -translate-x-1/2 w-10 h-6 rounded transition-transform ${channel.muted
+                className={`absolute w-10 h-6 rounded transition-transform ${channel.muted
                   ? 'bg-slate-600/90 border-2 border-slate-500'
                   : 'bg-slate-700/90 border-2 border-emerald-400/70 shadow-lg'
                   } ${dragging === channel.number ? 'scale-105' : ''}`}
                 style={{
                   bottom: `calc(${channel.faderLevel * 100}% - 12px)`,
+                  left: '14px' // Offset to align with the fader track (8px meter + 4px gap + approx centering)
                 }}
               />
             </div>
