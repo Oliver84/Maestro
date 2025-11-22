@@ -57,6 +57,13 @@ class AudioEngineService {
     }
 
     play(filePath: string, options: AudioPlaybackOptions = {}) {
+        // Force AudioContext to resume (Chrome/Electron autoplay policy)
+        if (Howler.ctx && Howler.ctx.state === 'suspended') {
+            Howler.ctx.resume().then(() => {
+                console.log('[Audio Engine] AudioContext resumed');
+            });
+        }
+
         // Ensure analyser is set up (sometimes Howler.ctx inits lazily)
         if (!this.analyser) {
             this.setupAnalyser();
@@ -68,14 +75,24 @@ class AudioEngineService {
             this.currentHowl.unload();
         }
 
-        // In Electron, we ensure the file protocol is present
-        const src = filePath.startsWith('file://') || filePath.startsWith('http')
-            ? filePath
-            : `file://${filePath}`;
+        // Handle path protocol for Electron
+        let src = filePath;
+
+        // If it's a local file path (not starting with http or media), use media protocol
+        // We assume any path starting with / or X: is a local absolute path
+        if (!filePath.startsWith('http') && !filePath.startsWith('media://')) {
+             // Clean up any existing file:// prefix just in case
+            if (filePath.startsWith('file://')) {
+                src = filePath.replace('file://', 'media://');
+            } else {
+                // Ensure 3 slashes for absolute paths: media:///User/name/...
+                src = `media://${filePath.startsWith('/') ? '' : '/'}${filePath}`;
+            }
+        }
 
         const volume = options.volume !== undefined ? options.volume : this.masterVolume;
 
-        console.log(`[Audio Engine] Playing: ${filePath} at volume ${volume}`);
+        console.log(`[Audio Engine] Playing: ${src} at volume ${volume}`);
 
         this.currentHowl = new Howl({
             src: [src],
@@ -84,20 +101,20 @@ class AudioEngineService {
             format: ['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a'], // Hints for Howler
             loop: options.loop || false,
             onend: () => {
-                console.log(`[Audio Engine] Playback finished: ${filePath}`);
+                console.log(`[Audio Engine] Playback finished: ${src}`);
                 this.currentHowl = null;
                 if (options.onEnd) {
                     options.onEnd();
                 }
             },
             onloaderror: (id, error) => {
-                console.error(`[Audio Engine] Load error for ${filePath}:`, error);
+                console.error(`[Audio Engine] Load error for ${src}:`, error);
                 if (options.onError) {
                     options.onError(error);
                 }
             },
             onplayerror: (id, error) => {
-                console.error(`[Audio Engine] Play error for ${filePath}:`, error);
+                console.error(`[Audio Engine] Play error for ${src}:`, error);
                 if (options.onError) {
                     options.onError(error);
                 }

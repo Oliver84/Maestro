@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, protocol, net } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { Client } from 'node-osc'
@@ -26,6 +26,11 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 
 let win: BrowserWindow | null
 let oscClient: Client | null = null
 
+// Register the custom protocol BEFORE the app is ready
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'media', privileges: { secure: true, supportFetchAPI: true, bypassCSP: true, stream: true } }
+])
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1200,
@@ -36,6 +41,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.mjs'),
       nodeIntegration: false,
       contextIsolation: true,
+      webSecurity: true,
     },
   })
 
@@ -111,4 +117,19 @@ app.on('activate', () => {
   }
 })
 
-app.whenReady().then(createWindow)
+app.whenReady().then(() => {
+  // Handle media:// requests
+  protocol.handle('media', (request) => {
+    const url = request.url.slice('media://'.length)
+    // Decode the URL to handle spaces and special characters properly
+    const decodedUrl = decodeURIComponent(url)
+
+    // In Windows, path might look like /C:/Users... which is fine for file://
+    // In Mac/Linux, path starts with /, so media:///Users... becomes /Users...
+
+    // Using net.fetch with file:// protocol is the standard way to serve files
+    return net.fetch('file://' + decodedUrl)
+  })
+
+  createWindow()
+})
