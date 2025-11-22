@@ -24,15 +24,15 @@ graph TD
         AudioEngine[Web Audio API]
         OSCEngine[UDP Socket]
     end
-    
+
     subgraph X32 Console
         XUSB[X-USB Card]
         Core[X32 Core CPU]
     end
-    
+
     App -->|File Stream| AudioEngine
     AudioEngine -->|USB Cable (Audio)| XUSB
-    
+
     App -->|Command String| OSCEngine
     OSCEngine -->|Ethernet (UDP)| Core
 
@@ -89,7 +89,7 @@ const fireCue = async (cue) => {
   // 1. Audio
   if (cue.audioFilePath) {
     // Fade out previous if running?
-    audioEngine.fade(1.0, 0.0, 500, lastCueId); 
+    audioEngine.fade(1.0, 0.0, 500, lastCueId);
     // Start new
     audioEngine.play(cue.audioFilePath, { deviceId: settings.audioDeviceId });
   }
@@ -98,7 +98,7 @@ const fireCue = async (cue) => {
   if (cue.oscCommand) {
     oscClient.send(cue.oscCommand);
   }
-  
+
   // 3. Update UI
   set({ activeCueId: cue.id });
 }

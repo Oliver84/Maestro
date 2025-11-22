@@ -22,4 +22,5 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   // Custom API
   setX32Ip: (ip: string) => ipcRenderer.send('set-x32-ip', ip),
   sendOsc: (address: string, ...args: any[]) => ipcRenderer.send('send-osc', address, ...args),
+  selectAudioFile: () => ipcRenderer.invoke('open-file-dialog'),
 })

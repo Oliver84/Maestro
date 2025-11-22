@@ -36,7 +36,7 @@ graph TD
     Main -->|IPC: window-ready| UI
     UI -->|IPC: osc-send| OSC
     OSC -->|UDP: 10023| X32
-    
+
     UI -->|Web Audio API| Audio
     Audio -->|Sink ID Routing| USB
 
@@ -113,7 +113,7 @@ sequenceDiagram
 
     User->>UI: Presses Spacebar
     UI->>Store: fireSelectedCue()
-    
+
     rect rgb(30, 40, 50)
         Note right of Store: ACTION BEGINS
         Store->>Store: Update activeCueId

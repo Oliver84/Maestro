@@ -4,19 +4,18 @@ import { Dashboard } from './components/Dashboard/Dashboard'
 import { Sidebar } from './components/Sidebar/Sidebar'
 import { SettingsModal } from './components/Settings/SettingsModal'
 import { useAppStore } from './store/useAppStore'
-import { initializeMockChannels, initializeMockCues } from './utils/mockData'
+import { initializeMockChannels } from './utils/mockData'
 
 function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const { settings } = useAppStore()
+  const { settings, selectNextCue, selectPreviousCue, fireCue, selectedCueId, activeCueId, cues } = useAppStore()
 
-  // Initialize mock data for simulation mode
+  // Initialize mock channels (but NOT cues) for simulation mode
   useEffect(() => {
     if (settings.simulationMode) {
       initializeMockChannels();
-      initializeMockCues();
     }
-  }, []);
+  }, [settings.simulationMode]);
 
   // Sync settings with Electron Main process
   useEffect(() => {
@@ -24,6 +23,43 @@ function App() {
       window.ipcRenderer.setX32Ip(settings.x32Ip);
     }
   }, [settings.x32Ip])
+
+  // Global Keyboard Navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if focused on an input
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
+
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          selectNextCue();
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          selectPreviousCue();
+          break;
+        case ' ':
+          e.preventDefault();
+          // Fire selected, or fallback to next available logic
+          if (selectedCueId) {
+            fireCue(selectedCueId);
+          } else {
+            // Auto-select first logic handled in store usually, but just in case
+            const state = useAppStore.getState();
+            if (state.cues.length > 0) fireCue(state.cues[0].id);
+          }
+          break;
+        case 'Escape':
+          e.preventDefault();
+          useAppStore.getState().stopAll();
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectNextCue, selectPreviousCue, fireCue, selectedCueId]);
 
   return (
     <div className="flex flex-col h-screen w-screen bg-slate-950 text-slate-100 font-sans overflow-hidden">
