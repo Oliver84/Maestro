@@ -101,6 +101,13 @@ export const CueList: React.FC = () => {
         }
     };
 
+    // Helper to extract filename from path
+    const getFilename = (path: string) => {
+        // Handle both Windows (\) and Unix (/) separators
+        const name = path.split(/[/\\]/).pop();
+        return name || path;
+    };
+
     return (
         <div
             className={`flex-1 overflow-y-auto transition-colors ${isDraggingOverList ? 'bg-slate-800/50 ring-2 ring-emerald-500/50' : 'bg-slate-900/30'}`}
@@ -163,8 +170,16 @@ export const CueList: React.FC = () => {
                                             {cue.title}
                                         </div>
                                     )}
-                                    <div className="text-xs text-slate-500 mt-1">
-                                        Scene 1
+                                    <div className="flex flex-col gap-1 mt-1">
+                                        <div className="text-xs text-slate-500">Scene 1</div>
+                                        {cue.audioFilePath && (
+                                            <div className="flex items-center gap-1 text-xs text-emerald-400/80 font-mono bg-emerald-900/20 px-1.5 py-0.5 rounded w-fit">
+                                                <Music size={10} />
+                                                <span className="truncate max-w-[200px]" title={cue.audioFilePath}>
+                                                    {getFilename(cue.audioFilePath)}
+                                                </span>
+                                            </div>
+                                        )}
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 text-sm text-slate-400 italic font-serif">

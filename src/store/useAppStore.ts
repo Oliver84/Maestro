@@ -146,7 +146,8 @@ export const useAppStore = create<AppState>()(
 
             stopAll: () => {
                 console.log('[Store] Stopping all playback');
-                set({ activeCueId: null });
+                // We intentionally DO NOT reset activeCueId here so the user knows where they are.
+                // set({ activeCueId: null });
 
                 // Stop audio playback
                 import('../services/AudioEngine').then(({ AudioEngine }) => {
