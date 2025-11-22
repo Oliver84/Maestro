@@ -10,6 +10,8 @@ export interface Cue {
     audioFilePath: string;
     audioVolume: number;
     color?: string;
+    scene?: string;
+    snippetId?: number | null;
 }
 
 export interface X32Channel {
@@ -83,6 +85,8 @@ export const useAppStore = create<AppState>()(
                 const newCue: Cue = {
                     id: uuidv4(),
                     sequence: state.cues.length + 1,
+                    scene: '',
+                    snippetId: null,
                     ...cueData,
                 };
                 return { cues: [...state.cues, newCue] };
@@ -138,8 +142,20 @@ export const useAppStore = create<AppState>()(
                 // Import OscClient dynamically to send OSC commands
                 import('../services/OscClient').then(({ getOscClient }) => {
                     const oscClient = getOscClient();
-                    if (cue.oscCommand && !state.settings.simulationMode) {
-                        oscClient.sendCustomCommand(cue.oscCommand);
+                    if (!state.settings.simulationMode) {
+                        // Send Generic OSC Command if present
+                        if (cue.oscCommand) {
+                            oscClient.sendCustomCommand(cue.oscCommand);
+                        }
+                        // Send X32 Snippet if present
+                        if (cue.snippetId) {
+                            // Behringer X32 command for loading a snippet: /-action/gosnippet {id}
+                            // Or /action/gosnippet (depending on firmware/docs, but usually /action/gosnippet)
+                            // The mock client usually expects specific formats, but for real OSC:
+                            // The library node-osc sends arguments.
+                            // We'll construct a command string for now as the generic handler does.
+                            oscClient.sendCustomCommand(`/action/gosnippet ${cue.snippetId}`);
+                        }
                     }
                 });
             },

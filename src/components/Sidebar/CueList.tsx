@@ -7,6 +7,8 @@ export const CueList: React.FC = () => {
     const [isDraggingOverList, setIsDraggingOverList] = useState(false);
     const [dragOverCueId, setDragOverCueId] = useState<string | null>(null);
     const [editingCueId, setEditingCueId] = useState<string | null>(null);
+    const [editingSnippetId, setEditingSnippetId] = useState<string | null>(null);
+    const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
 
     const handleDragOverList = (e: DragEvent<HTMLDivElement>) => {
         e.preventDefault();
@@ -108,6 +110,9 @@ export const CueList: React.FC = () => {
         return name || path;
     };
 
+    // Prevent cue firing when clicking on inputs
+    const stopProp = (e: React.MouseEvent) => e.stopPropagation();
+
     return (
         <div
             className={`flex-1 overflow-y-auto transition-colors ${isDraggingOverList ? 'bg-slate-800/50 ring-2 ring-emerald-500/50' : 'bg-slate-900/30'}`}
@@ -120,7 +125,7 @@ export const CueList: React.FC = () => {
                     <tr>
                         <th className="px-6 py-4 border-b border-slate-800 w-20">Cue #</th>
                         <th className="px-6 py-4 border-b border-slate-800">Description</th>
-                        <th className="px-6 py-4 border-b border-slate-800 w-1/3">Trigger / Script Context</th>
+                        <th className="px-6 py-4 border-b border-slate-800 w-32">Snippet</th>
                         <th className="px-6 py-4 border-b border-slate-800 w-32 text-right">Type</th>
                         <th className="px-6 py-4 border-b border-slate-800 w-24 text-right">Actions</th>
                     </tr>
@@ -129,10 +134,20 @@ export const CueList: React.FC = () => {
                     {cues.map((cue) => {
                         const isActive = activeCueId === cue.id;
                         const isDragTarget = dragOverCueId === cue.id;
-                        const isEditing = editingCueId === cue.id;
+                        const isEditingTitle = editingCueId === cue.id;
+                        const isEditingSnippet = editingSnippetId === cue.id;
+                        const isEditingScene = editingSceneId === cue.id;
 
-                        const type = cue.audioFilePath ? 'SONG' : (cue.oscCommand ? 'OSC' : 'CUE');
-                        const typeColor = type === 'SONG' ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-amber-700/20 text-amber-500 border-amber-700/30';
+                        // Logic for type display
+                        let type = 'CUE';
+                        if (cue.audioFilePath && cue.snippetId) type = 'MIXED';
+                        else if (cue.audioFilePath) type = 'SONG';
+                        else if (cue.snippetId) type = 'SNIPPET';
+
+                        const typeColor = type === 'SONG' ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' :
+                                          type === 'SNIPPET' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' :
+                                          type === 'MIXED' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' :
+                                          'bg-slate-700/20 text-slate-400 border-slate-700/30';
 
                         return (
                             <tr
@@ -141,7 +156,7 @@ export const CueList: React.FC = () => {
                                     ${isActive ? 'bg-slate-800/80' : 'hover:bg-slate-800/30'}
                                     ${isDragTarget ? '!bg-emerald-900/30 ring-1 ring-emerald-500/50' : ''}
                                 `}
-                                onClick={() => !isEditing && fireCue(cue.id)}
+                                onClick={() => !isEditingTitle && !isEditingSnippet && !isEditingScene && fireCue(cue.id)}
                                 onDragOver={(e) => handleDragOverRow(e, cue.id)}
                                 onDragLeave={handleDragLeaveRow}
                                 onDrop={(e) => handleDropOnRow(e, cue.id)}
@@ -149,8 +164,8 @@ export const CueList: React.FC = () => {
                                 <td className="px-6 py-4 font-mono text-slate-400 group-hover:text-slate-200 text-lg">
                                     SQ {cue.sequence}
                                 </td>
-                                <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                                    {isEditing ? (
+                                <td className="px-6 py-4" onClick={stopProp}>
+                                    {isEditingTitle ? (
                                         <input
                                             autoFocus
                                             className="bg-slate-950 text-white font-bold text-lg px-2 py-1 rounded border border-emerald-500 outline-none w-full"
@@ -171,7 +186,23 @@ export const CueList: React.FC = () => {
                                         </div>
                                     )}
                                     <div className="flex flex-col gap-1 mt-1">
-                                        <div className="text-xs text-slate-500">Scene 1</div>
+                                        {/* Scene Name Edit */}
+                                        <div className="text-xs text-slate-500 cursor-text hover:text-emerald-400" onClick={() => setEditingSceneId(cue.id)}>
+                                            {isEditingScene ? (
+                                                <input
+                                                    autoFocus
+                                                    className="bg-slate-950 text-slate-300 px-1 py-0.5 rounded border border-emerald-500 outline-none w-32"
+                                                    placeholder="Scene Name"
+                                                    value={cue.scene || ''}
+                                                    onChange={(e) => updateCue(cue.id, { scene: e.target.value })}
+                                                    onBlur={() => setEditingSceneId(null)}
+                                                    onKeyDown={(e) => { if(e.key === 'Enter') setEditingSceneId(null); }}
+                                                />
+                                            ) : (
+                                                cue.scene || "Click to set scene"
+                                            )}
+                                        </div>
+
                                         {cue.audioFilePath && (
                                             <div className="flex items-center gap-1 text-xs text-emerald-400/80 font-mono bg-emerald-900/20 px-1.5 py-0.5 rounded w-fit">
                                                 <Music size={10} />
@@ -182,8 +213,26 @@ export const CueList: React.FC = () => {
                                         )}
                                     </div>
                                 </td>
-                                <td className="px-6 py-4 text-sm text-slate-400 italic font-serif">
-                                    "Start of Production"
+                                <td className="px-6 py-4 text-sm text-slate-400 italic font-serif" onClick={stopProp}>
+                                    {isEditingSnippet ? (
+                                        <input
+                                            autoFocus
+                                            type="number"
+                                            className="bg-slate-950 text-white px-2 py-1 rounded border border-emerald-500 outline-none w-20"
+                                            placeholder="#"
+                                            value={cue.snippetId || ''}
+                                            onChange={(e) => updateCue(cue.id, { snippetId: e.target.value ? parseInt(e.target.value) : null })}
+                                            onBlur={() => setEditingSnippetId(null)}
+                                            onKeyDown={(e) => { if(e.key === 'Enter') setEditingSnippetId(null); }}
+                                        />
+                                    ) : (
+                                        <div
+                                            className="cursor-text hover:text-emerald-400 border border-transparent hover:border-slate-700 rounded px-2 py-1"
+                                            onClick={() => setEditingSnippetId(cue.id)}
+                                        >
+                                            {cue.snippetId ? `Snippet ${cue.snippetId}` : '-'}
+                                        </div>
+                                    )}
                                 </td>
                                 <td className="px-6 py-4 text-right">
                                     <span className={`text-[10px] font-bold px-2 py-1 rounded border ${typeColor}`}>

@@ -43,6 +43,14 @@ class AudioEngineService {
         return null;
     }
 
+    getFrequencyData(): Uint8Array | null {
+        if (this.analyser && this.dataArray) {
+            this.analyser.getByteFrequencyData(this.dataArray);
+            return this.dataArray;
+        }
+        return null;
+    }
+
     setDeviceId(deviceId: string) {
         this.currentDeviceId = deviceId;
         console.log(`[Audio Engine] Audio device set to: ${deviceId}`);
