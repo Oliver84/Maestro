@@ -17,6 +17,22 @@ function App() {
     }
   }, [settings.simulationMode]);
 
+  // Initialize OscClient logging
+  useEffect(() => {
+    import('./services/OscClient').then(({ getOscClient }) => {
+      getOscClient().setLogCallback((msg) => {
+        useAppStore.getState().addLog(msg);
+      });
+    });
+  }, []);
+
+  // Sync simulation mode with OscClient
+  useEffect(() => {
+    import('./services/OscClient').then(({ getOscClient }) => {
+      getOscClient().setSimulationMode(settings.simulationMode);
+    });
+  }, [settings.simulationMode]);
+
   // Sync settings with Electron Main process
   useEffect(() => {
     if (window.ipcRenderer) {

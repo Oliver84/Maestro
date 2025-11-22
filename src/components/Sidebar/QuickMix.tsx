@@ -18,11 +18,10 @@ export const QuickMix: React.FC = () => {
   // Create throttled OSC send functions (50ms throttle)
   const throttledSendFader = useMemo(
     () => throttle((channelNum: number, level: number) => {
-      if (!settings.simulationMode) {
-        oscClient.setChannelFader(channelNum, level);
-      }
+      // OscClient handles simulation mode check internally
+      oscClient.setChannelFader(channelNum, level);
     }, 50),
-    [settings.simulationMode, oscClient]
+    [oscClient]
   );
 
   const handleLevelChange = (channelNum: number, newLevel: number) => {
@@ -69,9 +68,8 @@ export const QuickMix: React.FC = () => {
       updateChannelMute(channelNum, newMutedState);
 
       // Send OSC command (no throttling needed for mute)
-      if (!settings.simulationMode) {
-        oscClient.setChannelMute(channelNum, newMutedState);
-      }
+      // Send OSC command (OscClient handles simulation mode check internally)
+      oscClient.setChannelMute(channelNum, newMutedState);
 
       console.log(`[QuickMix] Channel ${channelNum} mute: ${newMutedState ? 'MUTED' : 'ON'}`);
     }

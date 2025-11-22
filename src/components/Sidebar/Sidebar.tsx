@@ -10,7 +10,7 @@ export const Sidebar: React.FC = () => {
     const handleAddCue = () => {
         addCue({
             title: 'New Cue',
-            oscCommand: '/action/gosnippet 1',
+            oscCommand: '',
             audioFilePath: '',
             audioVolume: 1.0
         });

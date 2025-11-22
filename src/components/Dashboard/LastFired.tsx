@@ -1,61 +1,62 @@
-import React, { useState } from 'react';
-import { Terminal, ChevronDown, ChevronUp } from 'lucide-react';
-
-interface LogEntry {
-    timestamp: string;
-    message: string;
-}
-
-const MOCK_LOGS: LogEntry[] = [
-    { timestamp: '17:02:15', message: '/ch/16/mix/fader 1.00' },
-    { timestamp: '17:02:14', message: '/ch/16/mix/fader 0.99' },
-    { timestamp: '17:02:13', message: '/ch/16/mix/fader 0.97' },
-    { timestamp: '17:02:12', message: '/ch/16/mix/fader 0.94' },
-    { timestamp: '17:02:11', message: '/ch/16/mix/fader 0.91' },
-    { timestamp: '17:02:10', message: 'Ready to start show...' },
-];
+import React, { useEffect, useRef } from 'react';
+import { Terminal, Trash2 } from 'lucide-react';
+import { useAppStore } from '../../store/useAppStore';
 
 export const LastFired: React.FC = () => {
-    const [isExpanded, setIsExpanded] = useState(false);
+    const { logs, clearLogs } = useAppStore();
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    // Auto-scroll to bottom when new logs arrive
+    useEffect(() => {
+        if (scrollRef.current) {
+            // Use setTimeout to ensure DOM has updated before scrolling
+            setTimeout(() => {
+                if (scrollRef.current) {
+                    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+                }
+            }, 0);
+        }
+    }, [logs]);
 
     return (
-        <div className="mt-6 border-t border-slate-800 pt-4">
-            {/* Header */}
-            <button
-                onClick={() => setIsExpanded(!isExpanded)}
-                className="w-full flex items-center justify-between text-left group"
-            >
+        <div className="mt-2 border-t border-slate-800 pt-4 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                    <Terminal size={12} className="text-slate-600" />
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600">Last Fired</h3>
+                    <Terminal size={12} className="text-slate-500" />
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Logs</h3>
                 </div>
-                {isExpanded ? (
-                    <ChevronUp size={14} className="text-slate-600 group-hover:text-slate-400 transition-colors" />
-                ) : (
-                    <ChevronDown size={14} className="text-slate-600 group-hover:text-slate-400 transition-colors" />
+                {logs.length > 0 && (
+                    <button
+                        onClick={clearLogs}
+                        className="text-[10px] text-slate-600 hover:text-red-400 transition-colors flex items-center gap-1 uppercase tracking-wider font-semibold hover:bg-slate-800 px-2 py-1 rounded"
+                    >
+                        <Trash2 size={10} />
+                        Clear
+                    </button>
                 )}
-            </button>
+            </div>
 
-            {/* Last command preview (always visible) */}
-            {!isExpanded && (
-                <div className="mt-2 text-sm text-slate-500 italic font-light">
-                    Ready to start show...
+            <div className="bg-slate-950/50 rounded-lg border border-slate-800 h-32 relative flex flex-col">
+                <div
+                    ref={scrollRef}
+                    className="absolute inset-0 overflow-y-auto p-2 flex flex-col"
+                >
+                    {logs.length === 0 ? (
+                        <div className="m-auto text-slate-700 italic text-center">
+                            No logs recorded
+                        </div>
+                    ) : (
+                        <div className="mt-auto space-y-1 pb-1">
+                            {logs.map((log, index) => (
+                                <div key={index} className="flex items-start gap-2 text-slate-400 leading-tight">
+                                    <span className="text-slate-600 shrink-0 text-[10px] font-mono">[{log.timestamp}]</span>
+                                    <span className="break-all text-emerald-500/80 text-[10px] font-mono">{log.message}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
-            )}
-
-            {/* Expanded log view */}
-            {isExpanded && (
-                <div className="mt-3 bg-slate-950/50 rounded-lg border border-slate-800 p-3 max-h-48 overflow-y-auto">
-                    <div className="space-y-1 font-mono text-[10px]">
-                        {MOCK_LOGS.map((log, index) => (
-                            <div key={index} className="flex items-start gap-3 text-emerald-500/70 hover:text-emerald-400/90 transition-colors">
-                                <span className="text-slate-600 shrink-0">&gt;</span>
-                                <span className="flex-1">{log.message}</span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
+            </div>
         </div>
     );
 };

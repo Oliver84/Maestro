@@ -8,10 +8,20 @@ export class BrowserOscClient {
     private host: string;
     private port: number;
     private isConnected: boolean = false;
+    private simulationMode: boolean = false;
+    private logCallback: ((msg: string) => void) | null = null;
 
     constructor(host: string = '192.168.1.50', port: number = 10023) {
         this.host = host;
         this.port = port;
+    }
+
+    setSimulationMode(enabled: boolean) {
+        this.simulationMode = enabled;
+    }
+
+    setLogCallback(callback: (msg: string) => void) {
+        this.logCallback = callback;
     }
 
     /**
@@ -39,12 +49,17 @@ export class BrowserOscClient {
             return;
         }
 
-        if (window.ipcRenderer) {
+        if (window.ipcRenderer && !this.simulationMode) {
             // Use Electron IPC for real UDP transport
             window.ipcRenderer.sendOsc(address, ...args);
         }
 
-        console.log(`[OSC Client] Sent: ${address}`, args);
+        const message = `${address} ${args.map(a => typeof a === 'number' ? a.toFixed(2) : a).join(' ')}`;
+        console.log(`[OSC Client] Sent: ${message}`);
+
+        if (this.logCallback) {
+            this.logCallback(message);
+        }
     }
 
     /**

@@ -31,10 +31,14 @@ export const CueList: React.FC = () => {
     useEffect(() => {
         if (activeCueId) {
             lastActiveCueChangeTime.current = Date.now();
-            const element = cueRefs.current.get(activeCueId);
-            if (element) {
-                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
+            // Use setTimeout to ensure DOM has updated
+            setTimeout(() => {
+                const element = cueRefs.current.get(activeCueId);
+                if (element) {
+                    console.log('[CueList] Auto-scrolling to active cue:', activeCueId);
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 50);
         }
     }, [activeCueId, lastFiredAt]);
 
@@ -43,14 +47,20 @@ export const CueList: React.FC = () => {
         if (selectedCueId) {
             // If active cue changed recently (e.g. due to firing), don't scroll to selection (auto-advance)
             // This allows the user to see the active cue when it starts
-            if (Date.now() - lastActiveCueChangeTime.current < 250) {
+            const timeSinceActiveCueChange = Date.now() - lastActiveCueChangeTime.current;
+            if (timeSinceActiveCueChange < 250) {
+                console.log('[CueList] Skipping scroll to selected cue (active cue changed recently)');
                 return;
             }
 
-            const element = cueRefs.current.get(selectedCueId);
-            if (element) {
-                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
+            // Use setTimeout to ensure DOM has updated
+            setTimeout(() => {
+                const element = cueRefs.current.get(selectedCueId);
+                if (element) {
+                    console.log('[CueList] Auto-scrolling to selected cue:', selectedCueId);
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 50);
         }
     }, [selectedCueId]);
 

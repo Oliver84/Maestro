@@ -2,6 +2,11 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 
+export interface LogEntry {
+    timestamp: string;
+    message: string;
+}
+
 export interface Cue {
     id: string;
     sequence: number;
@@ -58,6 +63,10 @@ interface AppState {
 
     fireCue: (id: string) => void;
     stopAll: () => void;
+
+    logs: LogEntry[];
+    addLog: (message: string) => void;
+    clearLogs: () => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -220,15 +229,23 @@ export const useAppStore = create<AppState>()(
                 // Import OscClient dynamically to send OSC commands
                 import('../services/OscClient').then(({ getOscClient }) => {
                     const oscClient = getOscClient();
-                    if (!state.settings.simulationMode) {
-                        // Send Generic OSC Command if present
-                        if (cue.oscCommand) {
+
+                    // Send Generic OSC Command if present
+                    // Check if it's a duplicate snippet command to avoid double firing
+                    if (cue.oscCommand) {
+                        const hasSnippet = cue.snippetId !== null && cue.snippetId !== undefined;
+                        const isDuplicateSnippet = hasSnippet && cue.oscCommand.trim() === `/action/gosnippet ${cue.snippetId}`;
+                        // Also check for the legacy default value that might be stuck in old cues
+                        const isLegacyDefault = cue.oscCommand.trim() === '/action/gosnippet 1' && cue.snippetId !== 1;
+
+                        if (!isDuplicateSnippet && !isLegacyDefault) {
                             oscClient.sendCustomCommand(cue.oscCommand);
                         }
-                        // Send X32 Snippet if present
-                        if (cue.snippetId) {
-                            oscClient.sendCustomCommand(`/action/gosnippet ${cue.snippetId}`);
-                        }
+                    }
+
+                    // Send X32 Snippet if present
+                    if (cue.snippetId !== null && cue.snippetId !== undefined) {
+                        oscClient.sendCustomCommand(`/action/gosnippet ${cue.snippetId}`);
                     }
                 });
             },
@@ -242,14 +259,38 @@ export const useAppStore = create<AppState>()(
                 import('../services/AudioEngine').then(({ AudioEngine }) => {
                     AudioEngine.stopAll();
                 });
-            }
+            },
+
+            logs: [],
+            addLog: (message) => set((state) => {
+                const now = new Date();
+                const timestamp = now.toLocaleTimeString('en-US', {
+                    hour12: false,
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+
+                const newLogs = [
+                    ...state.logs,
+                    { timestamp, message }
+                ];
+
+                // Keep last 100 logs
+                return {
+                    logs: newLogs.slice(-100)
+                };
+            }),
+            clearLogs: () => set({ logs: [] }),
         }),
         {
             name: 'maestro-store',
             partialize: (state) => ({
                 cues: state.cues,
                 settings: state.settings,
-                selectedCueId: state.selectedCueId // Persist selection too
+                selectedCueId: state.selectedCueId, // Persist selection too
+                // Don't persist logs to keep storage clean on reload, or maybe we should? 
+                // User didn't specify, but usually logs are ephemeral. Let's not persist for now.
             }),
         }
     )
