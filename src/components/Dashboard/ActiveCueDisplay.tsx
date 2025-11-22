@@ -13,18 +13,14 @@ export const ActiveCueDisplay: React.FC = () => {
     // Progress state
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
+    const [isPlaying, setIsPlaying] = useState(false);
 
     useEffect(() => {
-        // Reset state when cue changes
-        setCurrentTime(0);
-        setDuration(0);
-
-        if (!activeCue?.audioFilePath) {
-            if (animationRef.current) cancelAnimationFrame(animationRef.current);
-            return;
-        }
-
+        // Start loop immediately to catch any active audio, regardless of cue
         const draw = () => {
+            const isAudioActive = AudioEngine.isPlaying();
+            setIsPlaying(isAudioActive);
+
             // 1. Update Time
             setCurrentTime(AudioEngine.getCurrentTime());
             const d = AudioEngine.getDuration();
@@ -36,14 +32,15 @@ export const ActiveCueDisplay: React.FC = () => {
                 const ctx = canvas.getContext('2d');
                 if (ctx) {
                     // Use Frequency Data for Bar Visualizer
+                    // Always try to get data if engine is active (or even if not, for fade outs)
                     const dataArray = AudioEngine.getFrequencyData();
 
-                    if (dataArray) {
-                        const width = canvas.width;
-                        const height = canvas.height;
+                    const width = canvas.width;
+                    const height = canvas.height;
 
-                        ctx.clearRect(0, 0, width, height);
+                    ctx.clearRect(0, 0, width, height);
 
+                    if (dataArray && isAudioActive) {
                         // Parameters for bar look
                         const barCount = 32; // Number of bars
                         const barWidth = (width / barCount) * 0.6; // Spacing
@@ -68,11 +65,7 @@ export const ActiveCueDisplay: React.FC = () => {
                             // Color logic (Gradient or solid)
                             ctx.fillStyle = '#047857'; // emerald-700 base
 
-                            // Draw background/inactive part if desired? Or just active.
-                            // Let's draw active bars centered vertically or from bottom.
-                            // Design requested: "Wave visual behind the progress bar"
-                            // Let's center them vertically for a "Voice memo" look
-
+                            // Center vertically
                             const y = (height - barHeight) / 2;
 
                             // Draw rounded rect
@@ -96,7 +89,7 @@ export const ActiveCueDisplay: React.FC = () => {
                 cancelAnimationFrame(animationRef.current);
             }
         };
-    }, [activeCueId, activeCue?.audioFilePath]);
+    }, []); // Empty dependency array: run always
 
     const formatTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
@@ -129,41 +122,6 @@ export const ActiveCueDisplay: React.FC = () => {
                     <div className="text-slate-400 font-medium italic mt-4 z-10">
                         "Start of Production"
                     </div>
-
-                    {/* Audio Visualizer & Time Display */}
-                    {activeCue.audioFilePath && (
-                        <div className="z-20 w-96 mt-10 relative h-24 flex items-center justify-center bg-slate-900/50 rounded-xl border border-slate-800 overflow-hidden">
-                             {/* Canvas Background */}
-                             <div className="absolute inset-0 flex items-center px-4 opacity-50">
-                                <canvas
-                                    ref={canvasRef}
-                                    width={350}
-                                    height={60}
-                                    className="w-full h-full"
-                                />
-                             </div>
-
-                             {/* Time & Progress Foreground */}
-                             <div className="relative z-10 flex flex-col w-full px-6">
-                                 <div className="flex justify-center items-baseline gap-2 mb-2 drop-shadow-md">
-                                     <span className="text-4xl font-black font-mono text-white tracking-tighter">
-                                        {formatTime(currentTime)}
-                                     </span>
-                                     <span className="text-xl font-medium font-mono text-slate-500">
-                                        / {formatTime(duration)}
-                                     </span>
-                                 </div>
-
-                                 {/* Progress Line */}
-                                 <div className="w-full bg-slate-800/80 h-1.5 rounded-full overflow-hidden backdrop-blur-sm">
-                                    <div
-                                        className="bg-emerald-400 h-full transition-all duration-100 ease-linear shadow-[0_0_10px_rgba(52,211,153,0.5)]"
-                                        style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
-                                    />
-                                 </div>
-                             </div>
-                        </div>
-                    )}
                 </>
             ) : (
                 <div className="opacity-30 flex flex-col items-center z-10">
@@ -171,6 +129,41 @@ export const ActiveCueDisplay: React.FC = () => {
                     <div className="text-xl font-light text-slate-500">Standby</div>
                 </div>
             )}
+
+            {/* Persistent Audio Visualizer & Time Display */}
+            {/* Shows whenever audio is playing or we have a duration/time to show */}
+            <div className={`z-20 w-96 mt-10 relative h-16 flex items-center justify-center bg-slate-900/50 rounded-xl border border-slate-800 overflow-hidden transition-opacity duration-500 ${isPlaying ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                    {/* Canvas Background */}
+                    <div className="absolute inset-0 flex items-center px-4 opacity-50">
+                    <canvas
+                        ref={canvasRef}
+                        width={350}
+                        height={60}
+                        className="w-full h-full"
+                    />
+                    </div>
+
+                    {/* Time & Progress Foreground - Reverted to "Small and to the side" style */}
+                    <div className="relative z-10 flex items-center gap-4 w-full px-4">
+                         {/* Current Time */}
+                        <span className="text-xs font-mono text-emerald-400 w-10 text-right">
+                            {formatTime(currentTime)}
+                        </span>
+
+                        {/* Progress Line */}
+                        <div className="flex-1 bg-slate-800/80 h-1.5 rounded-full overflow-hidden backdrop-blur-sm">
+                        <div
+                            className="bg-emerald-400 h-full transition-all duration-100 ease-linear shadow-[0_0_10px_rgba(52,211,153,0.5)]"
+                            style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+                        />
+                        </div>
+
+                        {/* Duration */}
+                        <span className="text-xs font-mono text-slate-500 w-10 text-left">
+                            {formatTime(duration)}
+                        </span>
+                    </div>
+            </div>
         </div>
     );
 };

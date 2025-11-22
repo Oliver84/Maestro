@@ -8,7 +8,14 @@ export interface AudioPlaybackOptions {
 }
 
 class AudioEngineService {
-    private currentHowl: Howl | null = null;
+    // Track active sounds. Map<src, Howl> or just a Set<Howl>.
+    // We use Set because multiple instances of same src might theoretically play,
+    // though in this app cue paths are keys.
+    private activeSounds: Set<Howl> = new Set();
+
+    // We track the "primary" or "last fired" sound for progress display purposes
+    private primaryHowl: Howl | null = null;
+
     private currentDeviceId: string = 'default';
     private masterVolume: number = 1.0;
     public analyser: AnalyserNode | null = null;
@@ -58,9 +65,10 @@ class AudioEngineService {
 
     setMasterVolume(volume: number) {
         this.masterVolume = Math.max(0, Math.min(1, volume));
-        if (this.currentHowl) {
-            this.currentHowl.volume(this.masterVolume);
-        }
+        // Update all active sounds
+        this.activeSounds.forEach(sound => {
+            sound.volume(this.masterVolume);
+        });
         console.log(`[Audio Engine] Master volume set to: ${this.masterVolume}`);
     }
 
@@ -77,23 +85,12 @@ class AudioEngineService {
             this.setupAnalyser();
         }
 
-        // Stop previous if any
-        if (this.currentHowl) {
-            this.currentHowl.stop();
-            this.currentHowl.unload();
-        }
-
         // Handle path protocol for Electron
         let src = filePath;
-
-        // If it's a local file path (not starting with http or media), use media protocol
-        // We assume any path starting with / or X: is a local absolute path
         if (!filePath.startsWith('http') && !filePath.startsWith('media://')) {
-             // Clean up any existing file:// prefix just in case
             if (filePath.startsWith('file://')) {
                 src = filePath.replace('file://', 'media://');
             } else {
-                // Ensure 3 slashes for absolute paths: media:///User/name/...
                 src = `media://${filePath.startsWith('/') ? '' : '/'}${filePath}`;
             }
         }
@@ -102,77 +99,74 @@ class AudioEngineService {
 
         console.log(`[Audio Engine] Playing: ${src} at volume ${volume}`);
 
-        this.currentHowl = new Howl({
+        const sound = new Howl({
             src: [src],
             volume,
-            html5: false, // IMPORTANT: html5: true uses HTML5 Audio element which bypasses Web Audio API (so no analyser). Set to false for Web Audio.
-            format: ['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a'], // Hints for Howler
+            html5: false,
+            format: ['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a'],
             loop: options.loop || false,
             onend: () => {
                 console.log(`[Audio Engine] Playback finished: ${src}`);
-                this.currentHowl = null;
+                this.activeSounds.delete(sound);
+                if (this.primaryHowl === sound) {
+                    this.primaryHowl = null;
+                }
                 if (options.onEnd) {
                     options.onEnd();
                 }
             },
             onloaderror: (id, error) => {
                 console.error(`[Audio Engine] Load error for ${src}:`, error);
+                this.activeSounds.delete(sound);
                 if (options.onError) {
                     options.onError(error);
                 }
             },
             onplayerror: (id, error) => {
                 console.error(`[Audio Engine] Play error for ${src}:`, error);
+                this.activeSounds.delete(sound);
                 if (options.onError) {
                     options.onError(error);
                 }
             }
         });
 
-        this.currentHowl.play();
+        this.activeSounds.add(sound);
+        this.primaryHowl = sound;
+        sound.play();
     }
 
-    stop() {
-        if (this.currentHowl) {
-            const duration = 300;
-            console.log('[Audio Engine] Stopping playback with fade out');
-            this.currentHowl.fade(this.currentHowl.volume(), 0, duration);
+    stopAll() {
+        const duration = 300;
+        console.log('[Audio Engine] Stopping all playback with fade out');
+
+        this.activeSounds.forEach(sound => {
+            sound.fade(sound.volume(), 0, duration);
             setTimeout(() => {
-                this.currentHowl?.stop();
-                this.currentHowl?.unload();
-                this.currentHowl = null;
+                sound.stop();
+                sound.unload();
+                this.activeSounds.delete(sound);
             }, duration);
-        }
-    }
-
-    pause() {
-        if (this.currentHowl && this.currentHowl.playing()) {
-            console.log('[Audio Engine] Pausing playback');
-            this.currentHowl.pause();
-        }
-    }
-
-    resume() {
-        if (this.currentHowl && !this.currentHowl.playing()) {
-            console.log('[Audio Engine] Resuming playback');
-            this.currentHowl.play();
-        }
+        });
+        this.primaryHowl = null;
     }
 
     isPlaying(): boolean {
-        return this.currentHowl !== null && this.currentHowl.playing();
+        // Return true if ANY sound is playing
+        return this.activeSounds.size > 0;
     }
 
     getCurrentTime(): number {
-        if (this.currentHowl) {
-            return this.currentHowl.seek() as number;
+        // Return time of the "primary" (most recently fired) sound
+        if (this.primaryHowl) {
+            return this.primaryHowl.seek() as number;
         }
         return 0;
     }
 
     getDuration(): number {
-        if (this.currentHowl) {
-            return this.currentHowl.duration();
+        if (this.primaryHowl) {
+            return this.primaryHowl.duration();
         }
         return 0;
     }

@@ -1,6 +1,6 @@
 import React, { useState, DragEvent } from 'react';
 import { useAppStore } from '../../store/useAppStore';
-import { Music, Trash2, X } from 'lucide-react';
+import { Music, Trash2, X, Layers, StopCircle } from 'lucide-react';
 
 export const CueList: React.FC = () => {
     const { cues, activeCueId, fireCue, addCue, updateCue, deleteCue } = useAppStore();
@@ -103,6 +103,12 @@ export const CueList: React.FC = () => {
         }
     };
 
+    const togglePlaybackMode = (e: React.MouseEvent, id: string, currentMode?: 'STOP_AND_GO' | 'OVERLAP') => {
+        e.stopPropagation();
+        const newMode = currentMode === 'OVERLAP' ? 'STOP_AND_GO' : 'OVERLAP';
+        updateCue(id, { playbackMode: newMode });
+    };
+
     // Helper to extract filename from path
     const getFilename = (path: string) => {
         // Handle both Windows (\) and Unix (/) separators
@@ -148,6 +154,8 @@ export const CueList: React.FC = () => {
                                           type === 'SNIPPET' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' :
                                           type === 'MIXED' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' :
                                           'bg-slate-700/20 text-slate-400 border-slate-700/30';
+
+                        const isOverlap = cue.playbackMode === 'OVERLAP';
 
                         return (
                             <tr
@@ -204,11 +212,22 @@ export const CueList: React.FC = () => {
                                         </div>
 
                                         {cue.audioFilePath && (
-                                            <div className="flex items-center gap-1 text-xs text-emerald-400/80 font-mono bg-emerald-900/20 px-1.5 py-0.5 rounded w-fit">
-                                                <Music size={10} />
-                                                <span className="truncate max-w-[200px]" title={cue.audioFilePath}>
-                                                    {getFilename(cue.audioFilePath)}
-                                                </span>
+                                            <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-1 text-xs text-emerald-400/80 font-mono bg-emerald-900/20 px-1.5 py-0.5 rounded w-fit">
+                                                    <Music size={10} />
+                                                    <span className="truncate max-w-[200px]" title={cue.audioFilePath}>
+                                                        {getFilename(cue.audioFilePath)}
+                                                    </span>
+                                                </div>
+                                                {/* Playback Mode Indicator */}
+                                                <button
+                                                    className={`text-[10px] flex items-center gap-1 px-1.5 py-0.5 rounded border transition-colors ${isOverlap ? 'border-blue-500/30 text-blue-300 bg-blue-500/10 hover:bg-blue-500/20' : 'border-slate-600 text-slate-400 bg-slate-800 hover:bg-slate-700'}`}
+                                                    onClick={(e) => togglePlaybackMode(e, cue.id, cue.playbackMode)}
+                                                    title={isOverlap ? "Mode: Overlap (Plays on top)" : "Mode: Stop & Go (Stops previous audio)"}
+                                                >
+                                                    {isOverlap ? <Layers size={10} /> : <StopCircle size={10} />}
+                                                    <span>{isOverlap ? 'LAYER' : 'STOP & GO'}</span>
+                                                </button>
                                             </div>
                                         )}
                                     </div>

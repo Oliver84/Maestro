@@ -12,6 +12,7 @@ export interface Cue {
     color?: string;
     scene?: string;
     snippetId?: number | null;
+    playbackMode?: 'STOP_AND_GO' | 'OVERLAP';
 }
 
 export interface X32Channel {
@@ -87,6 +88,7 @@ export const useAppStore = create<AppState>()(
                     sequence: state.cues.length + 1,
                     scene: '',
                     snippetId: null,
+                    playbackMode: 'STOP_AND_GO', // Default mode
                     ...cueData,
                 };
                 return { cues: [...state.cues, newCue] };
@@ -125,8 +127,14 @@ export const useAppStore = create<AppState>()(
 
                 // Import AudioEngine dynamically to avoid circular dependencies
                 import('../services/AudioEngine').then(({ AudioEngine }) => {
-                    // Play audio if file path is specified
+                    // Handle Playback Mode
                     if (cue.audioFilePath) {
+                        // If mode is STOP_AND_GO (or undefined/default), stop previous sounds.
+                        // If OVERLAP, do nothing (AudioEngine supports polyphony now).
+                        if (cue.playbackMode !== 'OVERLAP') {
+                            AudioEngine.stopAll();
+                        }
+
                         AudioEngine.play(cue.audioFilePath, {
                             volume: cue.audioVolume,
                             onEnd: () => {
@@ -149,11 +157,6 @@ export const useAppStore = create<AppState>()(
                         }
                         // Send X32 Snippet if present
                         if (cue.snippetId) {
-                            // Behringer X32 command for loading a snippet: /-action/gosnippet {id}
-                            // Or /action/gosnippet (depending on firmware/docs, but usually /action/gosnippet)
-                            // The mock client usually expects specific formats, but for real OSC:
-                            // The library node-osc sends arguments.
-                            // We'll construct a command string for now as the generic handler does.
                             oscClient.sendCustomCommand(`/action/gosnippet ${cue.snippetId}`);
                         }
                     }
@@ -167,7 +170,7 @@ export const useAppStore = create<AppState>()(
 
                 // Stop audio playback
                 import('../services/AudioEngine').then(({ AudioEngine }) => {
-                    AudioEngine.stop();
+                    AudioEngine.stopAll();
                 });
             }
         }),
