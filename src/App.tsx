@@ -45,16 +45,15 @@ function App() {
           if (selectedCueId) {
             fireCue(selectedCueId);
           } else {
-             // Auto-select first logic handled in store usually, but just in case
-             const state = useAppStore.getState();
-             if(state.cues.length > 0) fireCue(state.cues[0].id);
+            // Auto-select first logic handled in store usually, but just in case
+            const state = useAppStore.getState();
+            if (state.cues.length > 0) fireCue(state.cues[0].id);
           }
           break;
         case 'Escape':
-            // Optional: Stop All mapping?
-            // e.preventDefault();
-            // useAppStore.getState().stopAll();
-            break;
+          e.preventDefault();
+          useAppStore.getState().stopAll();
+          break;
       }
     };
 

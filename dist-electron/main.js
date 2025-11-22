@@ -1,4 +1,4 @@
-import { ipcMain, app, BrowserWindow } from "electron";
+import { protocol, ipcMain, app, BrowserWindow, net, dialog } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { createSocket } from "node:dgram";
@@ -245,6 +245,9 @@ const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
 let win;
 let oscClient = null;
+protocol.registerSchemesAsPrivileged([
+  { scheme: "media", privileges: { secure: true, supportFetchAPI: true, bypassCSP: true, stream: true } }
+]);
 function createWindow() {
   win = new BrowserWindow({
     width: 1200,
@@ -255,7 +258,8 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname$1, "preload.mjs"),
       nodeIntegration: false,
-      contextIsolation: true
+      contextIsolation: true,
+      webSecurity: true
     }
   });
   win.webContents.on("did-finish-load", () => {
@@ -267,6 +271,19 @@ function createWindow() {
     win.loadFile(path.join(RENDERER_DIST, "index.html"));
   }
 }
+ipcMain.handle("open-file-dialog", async () => {
+  if (!win) return null;
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    properties: ["openFile"],
+    filters: [
+      { name: "Audio", extensions: ["mp3", "wav", "aac", "m4a", "aiff", "flac", "ogg"] }
+    ]
+  });
+  if (canceled || filePaths.length === 0) {
+    return null;
+  }
+  return filePaths[0];
+});
 ipcMain.on("set-x32-ip", (_, ip) => {
   if (oscClient) {
     oscClient.close();
@@ -301,7 +318,14 @@ app.on("activate", () => {
     createWindow();
   }
 });
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  protocol.handle("media", (request) => {
+    const url = request.url.slice("media://".length);
+    const decodedUrl = decodeURIComponent(url);
+    return net.fetch("file://" + decodedUrl);
+  });
+  createWindow();
+});
 export {
   MAIN_DIST,
   RENDERER_DIST,

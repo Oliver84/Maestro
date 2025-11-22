@@ -150,7 +150,7 @@ export const QuickMix: React.FC = () => {
             </div>
 
             {/* Draggable slider handle - overlay */}
-            <div className="relative w-12 h-24 -mt-24 pointer-events-none">
+            <div className="relative w-12 h-24 -mt-24 pointer-events-none mb-3">
               <div
                 className={`absolute left-1/2 -translate-x-1/2 w-10 h-6 rounded transition-transform ${channel.muted
                   ? 'bg-slate-600/90 border-2 border-slate-500'
@@ -174,7 +174,7 @@ export const QuickMix: React.FC = () => {
             </button>
 
             {/* Label */}
-            <div className="text-[8px] font-bold text-slate-500 text-center uppercase tracking-wider max-w-[48px] truncate">
+            <div className="text-[8px] font-bold text-slate-500 text-center uppercase tracking-wider w-full break-words leading-tight px-0.5">
               {channel.name}
             </div>
           </div>

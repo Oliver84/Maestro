@@ -19,5 +19,6 @@ electron.contextBridge.exposeInMainWorld("ipcRenderer", {
   },
   // Custom API
   setX32Ip: (ip) => electron.ipcRenderer.send("set-x32-ip", ip),
-  sendOsc: (address, ...args) => electron.ipcRenderer.send("send-osc", address, ...args)
+  sendOsc: (address, ...args) => electron.ipcRenderer.send("send-osc", address, ...args),
+  selectAudioFile: () => electron.ipcRenderer.invoke("open-file-dialog")
 });
