@@ -41,6 +41,7 @@ interface AppState {
     lastFiredAt: number;
     settings: AppSettings;
     x32Channels: X32Channel[];
+    channelMeters: Record<number, number>;
     selectedChannelIds: number[];
 
     setAudioDevice: (id: string) => void;
@@ -51,6 +52,8 @@ interface AppState {
     setSelectedChannels: (channelNumbers: number[]) => void;
     updateChannelFader: (channelNumber: number, level: number) => void;
     updateChannelMute: (channelNumber: number, muted: boolean) => void;
+    updateChannelFromOsc: (channelNumber: number, type: 'fader' | 'mute' | 'name', value: any) => void;
+    updateBulkChannelMeters: (levels: number[]) => void;
     addCue: (cue: Omit<Cue, 'id' | 'sequence'>) => void;
     deleteCue: (id: string) => void;
     updateCue: (id: string, data: Partial<Cue>) => void;
@@ -82,6 +85,7 @@ export const useAppStore = create<AppState>()(
                 simulationMode: true, // Default to simulation mode
             },
             x32Channels: [],
+            channelMeters: {},
             selectedChannelIds: [],
 
             setAudioDevice: (id) => set((state) => ({ settings: { ...state.settings, audioDeviceId: id } })),
@@ -103,6 +107,28 @@ export const useAppStore = create<AppState>()(
                     ch.number === channelNumber ? { ...ch, muted } : ch
                 )
             })),
+
+            updateChannelFromOsc: (channelNumber, type, value) => set((state) => {
+                return {
+                    x32Channels: state.x32Channels.map(ch => {
+                        if (ch.number === channelNumber) {
+                            if (type === 'fader') return { ...ch, faderLevel: value };
+                            if (type === 'mute') return { ...ch, muted: value };
+                            if (type === 'name') return { ...ch, name: value };
+                        }
+                        return ch;
+                    })
+                };
+            }),
+
+            updateBulkChannelMeters: (levels) => set(() => {
+                // Convert array to record for easier access by channel number (1-based)
+                const newMeters: Record<number, number> = {};
+                levels.forEach((level, index) => {
+                    newMeters[index + 1] = level;
+                });
+                return { channelMeters: newMeters };
+            }),
 
             addCue: (cueData) => set((state) => {
                 const newCue: Cue = {

@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, protocol, net } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-import { Client } from 'node-osc'
+import { Client, Server } from 'node-osc'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -24,7 +24,12 @@ export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST
 
 let win: BrowserWindow | null
-let oscClient: Client | null = null
+// We use a bidirectional setup:
+// 1. A Server to listen on a random port (0.0.0.0:0)
+// 2. A Client to send messages, but it MUST share the same socket as the Server
+//    so that the X32 replies to the correct port.
+let oscServer: Server | null = null;
+let oscClient: Client | null = null;
 
 // Register the custom protocol BEFORE the app is ready
 protocol.registerSchemesAsPrivileged([
@@ -75,14 +80,54 @@ ipcMain.handle('open-file-dialog', async () => {
 
 // OSC IPC Handlers
 ipcMain.on('set-x32-ip', (_, ip: string) => {
+  // Clean up existing connections
   if (oscClient) {
-    oscClient.close();
+    // We don't need to close oscClient's socket because we're using oscServer's socket
+    // But we should probably nullify it
+    oscClient = null;
   }
+  if (oscServer) {
+    oscServer.close();
+    oscServer = null;
+  }
+
   try {
+    // 1. Create Server (Listener) on random port
+    oscServer = new Server(0, '0.0.0.0', () => {
+      // Access private _sock property to get the bound port
+      // @ts-ignore
+      const port = oscServer?._sock?.address()?.port;
+      console.log(`OSC Server listening on 0.0.0.0:${port}`);
+    });
+
+    // 2. Handle Incoming Messages
+    oscServer.on('message', (msg, rinfo) => {
+      console.log('Received OSC:', msg);
+      if (win) {
+        win.webContents.send('osc-message', msg, rinfo);
+      }
+    });
+
+    oscServer.on('error', (err) => {
+      console.error('OSC Server Error:', err);
+    });
+
+    // 3. Create Client (Sender)
+    // We init it with dummy port, but we will swap the socket immediately
     oscClient = new Client(ip, 10023);
-    console.log(`OSC Client connected to ${ip}:10023`);
+
+    // 4. Swap the socket!
+    // Close the socket created by Client
+    // @ts-ignore
+    oscClient._sock.close();
+    // Assign Server's socket to Client
+    // @ts-ignore
+    oscClient._sock = oscServer._sock;
+
+    console.log(`OSC Client configured to send to ${ip}:10023 using Server's socket`);
+
   } catch (err) {
-    console.error('Failed to create OSC client:', err);
+    console.error('Failed to create OSC connection:', err);
   }
 });
 
@@ -104,9 +149,12 @@ app.on('window-all-closed', () => {
     app.quit()
     win = null
   }
-  if (oscClient) {
-    oscClient.close();
+  if (oscServer) {
+    oscServer.close();
+    oscServer = null;
   }
+  // oscClient shares the socket, so it's effectively closed too
+  oscClient = null;
 })
 
 app.on('activate', () => {
