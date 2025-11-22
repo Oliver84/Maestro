@@ -127,14 +127,14 @@ export const useAppStore = create<AppState>()(
 
                 // Import AudioEngine dynamically to avoid circular dependencies
                 import('../services/AudioEngine').then(({ AudioEngine }) => {
-                    // Handle Playback Mode
-                    if (cue.audioFilePath) {
-                        // If mode is STOP_AND_GO (or undefined/default), stop previous sounds.
-                        // If OVERLAP, do nothing (AudioEngine supports polyphony now).
-                        if (cue.playbackMode !== 'OVERLAP') {
-                            AudioEngine.stopAll();
-                        }
+                    // Handle Playback Mode for ALL cues
+                    // If mode is STOP_AND_GO (or undefined/default), stop previous sounds.
+                    if (cue.playbackMode !== 'OVERLAP') {
+                        AudioEngine.stopAll();
+                    }
 
+                    // Play audio if file path is specified
+                    if (cue.audioFilePath) {
                         AudioEngine.play(cue.audioFilePath, {
                             volume: cue.audioVolume,
                             onEnd: () => {

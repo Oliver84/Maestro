@@ -211,25 +211,27 @@ export const CueList: React.FC = () => {
                                             )}
                                         </div>
 
-                                        {cue.audioFilePath && (
-                                            <div className="flex items-center gap-2">
+                                        {/* Controls Row: Audio Filename + Playback Mode */}
+                                        <div className="flex items-center gap-3 flex-wrap mt-1">
+                                            {cue.audioFilePath && (
                                                 <div className="flex items-center gap-1 text-xs text-emerald-400/80 font-mono bg-emerald-900/20 px-1.5 py-0.5 rounded w-fit">
                                                     <Music size={10} />
                                                     <span className="truncate max-w-[200px]" title={cue.audioFilePath}>
                                                         {getFilename(cue.audioFilePath)}
                                                     </span>
                                                 </div>
-                                                {/* Playback Mode Indicator */}
-                                                <button
-                                                    className={`text-[10px] flex items-center gap-1 px-1.5 py-0.5 rounded border transition-colors ${isOverlap ? 'border-blue-500/30 text-blue-300 bg-blue-500/10 hover:bg-blue-500/20' : 'border-slate-600 text-slate-400 bg-slate-800 hover:bg-slate-700'}`}
-                                                    onClick={(e) => togglePlaybackMode(e, cue.id, cue.playbackMode)}
-                                                    title={isOverlap ? "Mode: Overlap (Plays on top)" : "Mode: Stop & Go (Stops previous audio)"}
-                                                >
-                                                    {isOverlap ? <Layers size={10} /> : <StopCircle size={10} />}
-                                                    <span>{isOverlap ? 'LAYER' : 'STOP & GO'}</span>
-                                                </button>
-                                            </div>
-                                        )}
+                                            )}
+
+                                            {/* Playback Mode Indicator - Always Visible */}
+                                            <button
+                                                className={`text-[10px] flex items-center gap-1 px-1.5 py-0.5 rounded border transition-colors ${isOverlap ? 'border-blue-500/30 text-blue-300 bg-blue-500/10 hover:bg-blue-500/20' : 'border-slate-600 text-slate-400 bg-slate-800 hover:bg-slate-700'}`}
+                                                onClick={(e) => togglePlaybackMode(e, cue.id, cue.playbackMode)}
+                                                title={isOverlap ? "Mode: Overlap (Plays on top)" : "Mode: Stop & Go (Stops previous audio)"}
+                                            >
+                                                {isOverlap ? <Layers size={10} /> : <StopCircle size={10} />}
+                                                <span>{isOverlap ? 'LAYER' : 'STOP & GO'}</span>
+                                            </button>
+                                        </div>
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 text-sm text-slate-400 italic font-serif" onClick={stopProp}>
