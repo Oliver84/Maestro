@@ -1,5 +1,5 @@
-import React from 'react';
-import { Plus } from 'lucide-react';
+import React, { useState } from 'react';
+import { Plus, ChevronDown, ChevronUp } from 'lucide-react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useAppStore } from '../../store/useAppStore';
 import { CueList } from './CueList';
@@ -7,6 +7,7 @@ import { QuickMix } from './QuickMix';
 
 export const Sidebar: React.FC = () => {
     const { addCue } = useAppStore();
+    const [isQuickMixCollapsed, setIsQuickMixCollapsed] = useState(false);
 
     const handleAddCue = () => {
         addCue({
@@ -35,11 +36,29 @@ export const Sidebar: React.FC = () => {
                         <CueList />
                     </div>
                 </Panel>
-                <PanelResizeHandle className="h-1 bg-slate-800 hover:bg-emerald-500/50 transition-colors cursor-row-resize" />
-                <Panel defaultSize={30} minSize={15} maxSize={50}>
-                    <QuickMix />
-                </Panel>
+
+                {!isQuickMixCollapsed && (
+                    <>
+                        <PanelResizeHandle className="h-1 bg-slate-800 hover:bg-emerald-500/50 transition-colors cursor-row-resize" />
+                        <Panel defaultSize={30} minSize={15} maxSize={50}>
+                            <QuickMix />
+                        </Panel>
+                    </>
+                )}
             </PanelGroup>
+
+            {/* Collapse/Expand Toggle */}
+            <button
+                onClick={() => setIsQuickMixCollapsed(!isQuickMixCollapsed)}
+                className="h-6 bg-slate-900 border-t border-slate-800 hover:bg-slate-800 transition-colors flex items-center justify-center text-slate-500 hover:text-emerald-400 group"
+                title={isQuickMixCollapsed ? "Show Quick Mix" : "Hide Quick Mix"}
+            >
+                {isQuickMixCollapsed ? (
+                    <ChevronUp size={16} className="transition-transform" />
+                ) : (
+                    <ChevronDown size={16} className="transition-transform" />
+                )}
+            </button>
         </div>
     );
 };
