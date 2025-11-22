@@ -28,10 +28,12 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({
 
     const generateWaveform = (buffer: AudioBuffer) => {
         const data = buffer.getChannelData(0);
-        const step = Math.ceil(data.length / 200);
+        // Increase points for a smooth continuous wave
+        const POINT_COUNT = 300;
+        const step = Math.ceil(data.length / POINT_COUNT);
         const points: number[] = [];
 
-        for (let i = 0; i < 200; i++) {
+        for (let i = 0; i < POINT_COUNT; i++) {
             let min = 1.0;
             let max = -1.0;
             for (let j = 0; j < step; j++) {
@@ -41,12 +43,13 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({
                     if (datum > max) max = datum;
                 }
             }
+            // Push the max amplitude for this chunk
             points.push(Math.max(Math.abs(min), Math.abs(max)));
         }
 
         const globalMax = points.reduce((a, b) => Math.max(a, b), 0);
         const normalizedPoints = globalMax > 0
-            ? points.map(p => Math.pow(p / globalMax, 0.65))
+            ? points.map(p => Math.pow(p / globalMax, 0.8)) // Slightly less compression for natural look
             : points;
 
         console.log('[WaveformVisualizer] Generated points:', points.length);
@@ -115,81 +118,64 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({
             ctx.clearRect(0, 0, width, height);
 
             if (waveformPoints.length > 0) {
-                const barWidth = width / waveformPoints.length;
                 const progress = duration > 0 ? currentTime / duration : 0;
                 const progressX = width * progress;
-                const barGap = barWidth * 0.2;
 
-                // Background waveform with vertical gradient
-                const bgGradient = ctx.createLinearGradient(0, 0, 0, height);
-                bgGradient.addColorStop(0, '#64748b');
-                bgGradient.addColorStop(0.5, '#475569');
-                bgGradient.addColorStop(1, '#64748b');
-
-                waveformPoints.forEach((val, i) => {
-                    const x = i * barWidth + barGap / 2;
-                    const barHeight = Math.max(val * height, 3);
-                    const y = (height - barHeight) / 2;
-
-                    ctx.fillStyle = bgGradient;
+                // Helper to draw the waveform path
+                const drawWaveformPath = () => {
                     ctx.beginPath();
-                    ctx.roundRect(x, y, barWidth - barGap, barHeight, [2]);
-                    ctx.fill();
-                });
+                    const sliceWidth = width / (waveformPoints.length - 1);
 
-                // Foreground (filled) waveform with gradient and glow
+                    // Top half
+                    ctx.moveTo(0, height / 2);
+                    for (let i = 0; i < waveformPoints.length; i++) {
+                        const x = i * sliceWidth;
+                        const y = (height / 2) - (waveformPoints[i] * height / 2);
+                        ctx.lineTo(x, y);
+                    }
+
+                    // Bottom half (mirror)
+                    for (let i = waveformPoints.length - 1; i >= 0; i--) {
+                        const x = i * sliceWidth;
+                        const y = (height / 2) + (waveformPoints[i] * height / 2);
+                        ctx.lineTo(x, y);
+                    }
+                    ctx.closePath();
+                };
+
+                // 1. Draw Full Waveform (Unplayed / Background)
+                drawWaveformPath();
+                // Slate-400 with low opacity for a subtle dark-mode friendly background
+                ctx.fillStyle = 'rgba(148, 163, 184, 0.2)';
+                ctx.fill();
+
+                // 2. Draw Played Waveform (Foreground)
                 ctx.save();
                 ctx.beginPath();
                 ctx.rect(0, 0, progressX, height);
                 ctx.clip();
 
-                // Add glow effect
-                ctx.shadowColor = '#10b981';
-                ctx.shadowBlur = 12;
+                drawWaveformPath();
+                // Emerald-400 for the active progress - vibrant but dark-mode friendly
+                ctx.fillStyle = '#34d399';
+                ctx.fill();
 
-                // Active gradient
-                const activeGradient = ctx.createLinearGradient(0, 0, 0, height);
-                activeGradient.addColorStop(0, '#34d399');
-                activeGradient.addColorStop(0.5, '#10b981');
-                activeGradient.addColorStop(1, '#34d399');
-
-                waveformPoints.forEach((val, i) => {
-                    const x = i * barWidth + barGap / 2;
-                    const barHeight = Math.max(val * height, 3);
-                    const y = (height - barHeight) / 2;
-
-                    ctx.fillStyle = activeGradient;
-                    ctx.beginPath();
-                    ctx.roundRect(x, y, barWidth - barGap, barHeight, [2]);
-                    ctx.fill();
-                });
                 ctx.restore();
+
             } else {
-                // Simple progress line fallback with gradient
+                // Simple progress line fallback
                 const progress = duration > 0 ? currentTime / duration : 0;
                 const progressX = width * progress;
 
-                // Background line with gradient
-                const bgLineGradient = ctx.createLinearGradient(0, 0, width, 0);
-                bgLineGradient.addColorStop(0, 'rgba(100, 116, 139, 0.3)');
-                bgLineGradient.addColorStop(0.5, 'rgba(100, 116, 139, 0.6)');
-                bgLineGradient.addColorStop(1, 'rgba(100, 116, 139, 0.3)');
-
-                ctx.fillStyle = bgLineGradient;
+                // Background line
+                ctx.fillStyle = 'rgba(148, 163, 184, 0.2)';
                 ctx.beginPath();
                 ctx.roundRect(0, height / 2 - 2, width, 4, [2]);
                 ctx.fill();
 
-                // Active progress with glow and gradient
+                // Active progress
                 if (progress > 0) {
-                    ctx.shadowColor = '#10b981';
-                    ctx.shadowBlur = 8;
-
-                    const progressGradient = ctx.createLinearGradient(0, 0, progressX, 0);
-                    progressGradient.addColorStop(0, '#34d399');
-                    progressGradient.addColorStop(1, '#10b981');
-
-                    ctx.fillStyle = progressGradient;
+                    ctx.fillStyle = '#34d399';
                     ctx.beginPath();
                     ctx.roundRect(0, height / 2 - 2, progressX, 4, [2]);
                     ctx.fill();

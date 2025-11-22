@@ -5,7 +5,7 @@ import { InlineWaveform } from './InlineWaveform';
 import { AudioEngine } from '../../services/AudioEngine';
 
 export const CueList: React.FC = () => {
-    const { cues, fireCue, addCue, updateCue, deleteCue, selectedCueId, selectCue } = useAppStore();
+    const { cues, fireCue, addCue, updateCue, deleteCue, selectedCueId, selectCue, activeCueId, lastFiredAt } = useAppStore();
     const [isDraggingOverList, setIsDraggingOverList] = useState(false);
     const [dragOverCueId, setDragOverCueId] = useState<string | null>(null);
     const [editingCueId, setEditingCueId] = useState<string | null>(null);
@@ -13,6 +13,7 @@ export const CueList: React.FC = () => {
     const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
     const [playingCueIds, setPlayingCueIds] = useState<Set<string>>(new Set());
     const cueRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
+    const lastActiveCueChangeTime = useRef(0);
 
     // Track which cues are actually playing audio
     useEffect(() => {
@@ -26,9 +27,26 @@ export const CueList: React.FC = () => {
         return () => cancelAnimationFrame(animationId);
     }, []);
 
+    // Auto-scroll to active cue when it starts
+    useEffect(() => {
+        if (activeCueId) {
+            lastActiveCueChangeTime.current = Date.now();
+            const element = cueRefs.current.get(activeCueId);
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+    }, [activeCueId, lastFiredAt]);
+
     // Auto-scroll to selected cue
     useEffect(() => {
         if (selectedCueId) {
+            // If active cue changed recently (e.g. due to firing), don't scroll to selection (auto-advance)
+            // This allows the user to see the active cue when it starts
+            if (Date.now() - lastActiveCueChangeTime.current < 250) {
+                return;
+            }
+
             const element = cueRefs.current.get(selectedCueId);
             if (element) {
                 element.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -177,7 +195,8 @@ export const CueList: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-800/50">
                     {cues.map((cue) => {
-                        const isActive = playingCueIds.has(cue.id); // Actually playing audio
+                        // Active if it's the currently fired cue OR if it's playing audio (e.g. overlap)
+                        const isActive = activeCueId === cue.id || playingCueIds.has(cue.id);
                         const isSelected = selectedCueId === cue.id; // Selected/Next
                         const isDragTarget = dragOverCueId === cue.id;
                         const isEditingTitle = editingCueId === cue.id;

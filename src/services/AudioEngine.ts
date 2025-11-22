@@ -156,8 +156,12 @@ export class AudioEngineService {
             setTimeout(() => {
                 activeSound.howl.stop();
                 activeSound.howl.unload();
-                // Remove from map after actually stopping
-                this.activeSounds.delete(activeSound.cueId);
+                // Remove from map ONLY if it's still the same sound instance
+                // (Avoid removing a newly started instance of the same cue)
+                const currentSound = this.activeSounds.get(activeSound.cueId);
+                if (currentSound === activeSound) {
+                    this.activeSounds.delete(activeSound.cueId);
+                }
             }, duration);
         });
 

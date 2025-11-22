@@ -32,6 +32,7 @@ interface AppState {
     cues: Cue[];
     activeCueId: string | null;
     selectedCueId: string | null;
+    lastFiredAt: number;
     settings: AppSettings;
     x32Channels: X32Channel[];
     selectedChannelIds: number[];
@@ -63,6 +64,7 @@ export const useAppStore = create<AppState>()(
             cues: [], // Initial state is empty, no mock data
             activeCueId: null,
             selectedCueId: null, // Initialize selection
+            lastFiredAt: 0,
             settings: {
                 x32Ip: '192.168.1.50',
                 audioDeviceId: 'default',
@@ -175,7 +177,7 @@ export const useAppStore = create<AppState>()(
                     return;
                 }
 
-                set({ activeCueId: id, selectedCueId: id });
+                set({ activeCueId: id, selectedCueId: id, lastFiredAt: Date.now() });
                 console.log(`[Store] Firing cue: ${cue.title}`);
 
                 // Advance selection to next cue (Auto-step)
