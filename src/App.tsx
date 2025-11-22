@@ -4,19 +4,10 @@ import { Dashboard } from './components/Dashboard/Dashboard'
 import { Sidebar } from './components/Sidebar/Sidebar'
 import { SettingsModal } from './components/Settings/SettingsModal'
 import { useAppStore } from './store/useAppStore'
-import { initializeMockChannels, initializeMockCues } from './utils/mockData'
 
 function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const { settings } = useAppStore()
-
-  // Initialize mock data for simulation mode
-  useEffect(() => {
-    if (settings.simulationMode) {
-      initializeMockChannels();
-      initializeMockCues();
-    }
-  }, []);
 
   // Sync settings with Electron Main process
   useEffect(() => {
@@ -92,4 +83,4 @@ function App() {
   )
 }
 
-export default App
+export default App()

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface Cue {
@@ -46,108 +47,120 @@ interface AppState {
     stopAll: () => void;
 }
 
-export const useAppStore = create<AppState>((set) => ({
-    cues: [],
-    activeCueId: null,
-    settings: {
-        x32Ip: '192.168.1.50',
-        audioDeviceId: 'default',
-        simulationMode: true, // Default to simulation mode
-    },
-    x32Channels: [],
-    selectedChannelIds: [],
+export const useAppStore = create<AppState>()(
+    persist(
+        (set) => ({
+            cues: [], // Initial state is empty, no mock data
+            activeCueId: null,
+            settings: {
+                x32Ip: '192.168.1.50',
+                audioDeviceId: 'default',
+                simulationMode: true, // Default to simulation mode
+            },
+            x32Channels: [],
+            selectedChannelIds: [],
 
-    setAudioDevice: (id) => set((state) => ({ settings: { ...state.settings, audioDeviceId: id } })),
-    setX32Ip: (ip) => set((state) => ({ settings: { ...state.settings, x32Ip: ip } })),
-    setSimulationMode: (enabled) => set((state) => ({ settings: { ...state.settings, simulationMode: enabled } })),
+            setAudioDevice: (id) => set((state) => ({ settings: { ...state.settings, audioDeviceId: id } })),
+            setX32Ip: (ip) => set((state) => ({ settings: { ...state.settings, x32Ip: ip } })),
+            setSimulationMode: (enabled) => set((state) => ({ settings: { ...state.settings, simulationMode: enabled } })),
 
-    setX32Channels: (channels) => set({ x32Channels: channels }),
-    setSelectedChannels: (channelNumbers) => set({ selectedChannelIds: channelNumbers }),
+            setX32Channels: (channels) => set({ x32Channels: channels }),
+            setSelectedChannels: (channelNumbers) => set({ selectedChannelIds: channelNumbers }),
 
-    updateChannelFader: (channelNumber, level) => set((state) => ({
-        x32Channels: state.x32Channels.map(ch =>
-            ch.number === channelNumber ? { ...ch, faderLevel: level } : ch
-        )
-    })),
+            updateChannelFader: (channelNumber, level) => set((state) => ({
+                x32Channels: state.x32Channels.map(ch =>
+                    ch.number === channelNumber ? { ...ch, faderLevel: level } : ch
+                )
+            })),
 
-    updateChannelMute: (channelNumber, muted) => set((state) => ({
-        x32Channels: state.x32Channels.map(ch =>
-            ch.number === channelNumber ? { ...ch, muted } : ch
-        )
-    })),
+            updateChannelMute: (channelNumber, muted) => set((state) => ({
+                x32Channels: state.x32Channels.map(ch =>
+                    ch.number === channelNumber ? { ...ch, muted } : ch
+                )
+            })),
 
-    addCue: (cueData) => set((state) => {
-        const newCue: Cue = {
-            id: uuidv4(),
-            sequence: state.cues.length + 1,
-            ...cueData,
-        };
-        return { cues: [...state.cues, newCue] };
-    }),
+            addCue: (cueData) => set((state) => {
+                const newCue: Cue = {
+                    id: uuidv4(),
+                    sequence: state.cues.length + 1,
+                    ...cueData,
+                };
+                return { cues: [...state.cues, newCue] };
+            }),
 
-    deleteCue: (id) => set((state) => {
-        const newCues = state.cues
-            .filter(c => c.id !== id)
-            .map((c, i) => ({ ...c, sequence: i + 1 })); // Re-sequence
-        return { cues: newCues };
-    }),
+            deleteCue: (id) => set((state) => {
+                const newCues = state.cues
+                    .filter(c => c.id !== id)
+                    .map((c, i) => ({ ...c, sequence: i + 1 })); // Re-sequence
+                return { cues: newCues };
+            }),
 
-    updateCue: (id, data) => set((state) => ({
-        cues: state.cues.map((cue) => cue.id === id ? { ...cue, ...data } : cue)
-    })),
+            updateCue: (id, data) => set((state) => ({
+                cues: state.cues.map((cue) => cue.id === id ? { ...cue, ...data } : cue)
+            })),
 
-    reorderCues: (fromIndex, toIndex) => set((state) => {
-        const newCues = [...state.cues];
-        const [movedCue] = newCues.splice(fromIndex, 1);
-        newCues.splice(toIndex, 0, movedCue);
-        // Re-sequence
-        return { cues: newCues.map((c, i) => ({ ...c, sequence: i + 1 })) };
-    }),
+            reorderCues: (fromIndex, toIndex) => set((state) => {
+                const newCues = [...state.cues];
+                const [movedCue] = newCues.splice(fromIndex, 1);
+                newCues.splice(toIndex, 0, movedCue);
+                // Re-sequence
+                return { cues: newCues.map((c, i) => ({ ...c, sequence: i + 1 })) };
+            }),
 
-    fireCue: (id) => {
-        const state = useAppStore.getState();
-        const cue = state.cues.find(c => c.id === id);
+            fireCue: (id) => {
+                const state = useAppStore.getState();
+                const cue = state.cues.find(c => c.id === id);
 
-        if (!cue) {
-            console.warn(`[Store] Cue ${id} not found`);
-            return;
-        }
+                if (!cue) {
+                    console.warn(`[Store] Cue ${id} not found`);
+                    return;
+                }
 
-        set({ activeCueId: id });
-        console.log(`[Store] Firing cue: ${cue.title}`);
+                set({ activeCueId: id });
+                console.log(`[Store] Firing cue: ${cue.title}`);
 
-        // Import AudioEngine dynamically to avoid circular dependencies
-        import('../services/AudioEngine').then(({ AudioEngine }) => {
-            // Play audio if file path is specified
-            if (cue.audioFilePath) {
-                AudioEngine.play(cue.audioFilePath, {
-                    volume: cue.audioVolume,
-                    onEnd: () => {
-                        console.log(`[Store] Audio finished for cue: ${cue.title}`);
-                    },
-                    onError: (error) => {
-                        console.error(`[Store] Audio error for cue: ${cue.title}`, error);
+                // Import AudioEngine dynamically to avoid circular dependencies
+                import('../services/AudioEngine').then(({ AudioEngine }) => {
+                    // Play audio if file path is specified
+                    if (cue.audioFilePath) {
+                        AudioEngine.play(cue.audioFilePath, {
+                            volume: cue.audioVolume,
+                            onEnd: () => {
+                                console.log(`[Store] Audio finished for cue: ${cue.title}`);
+                            },
+                            onError: (error) => {
+                                console.error(`[Store] Audio error for cue: ${cue.title}`, error);
+                            }
+                        });
                     }
                 });
+
+                // Import OscClient dynamically to send OSC commands
+                import('../services/OscClient').then(({ getOscClient }) => {
+                    const oscClient = getOscClient();
+                    if (cue.oscCommand && !state.settings.simulationMode) {
+                        oscClient.sendCustomCommand(cue.oscCommand);
+                    }
+                });
+            },
+
+            stopAll: () => {
+                console.log('[Store] Stopping all playback');
+                set({ activeCueId: null });
+
+                // Stop audio playback
+                import('../services/AudioEngine').then(({ AudioEngine }) => {
+                    AudioEngine.stop();
+                });
             }
-        });
-
-        // Import OscClient dynamically to send OSC commands
-        import('../services/OscClient').then(({ getOscClient }) => {
-            const oscClient = getOscClient();
-            if (cue.oscCommand && !state.settings.simulationMode) {
-                oscClient.sendCustomCommand(cue.oscCommand);
-            }
-        });
-    },
-
-    stopAll: () => {
-        console.log('[Store] Stopping all playback');
-        set({ activeCueId: null });
-
-        // Stop audio playback
-        import('../services/AudioEngine').then(({ AudioEngine }) => {
-            AudioEngine.stop();
-        });
-    }
-}));
+        }),
+        {
+            name: 'maestro-store',
+            partialize: (state) => ({
+                cues: state.cues,
+                settings: state.settings,
+                // We don't persist activeCueId or channels/faders as those should reset or be re-fetched
+            }),
+        }
+    )
+);

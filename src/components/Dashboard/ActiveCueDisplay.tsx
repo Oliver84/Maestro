@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { AudioEngine } from '../../services/AudioEngine';
 
@@ -10,52 +10,60 @@ export const ActiveCueDisplay: React.FC = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const animationRef = useRef<number>();
 
+    // Progress state
+    const [currentTime, setCurrentTime] = useState(0);
+    const [duration, setDuration] = useState(0);
+
     useEffect(() => {
+        // Reset state when cue changes
+        setCurrentTime(0);
+        setDuration(0);
+
         if (!activeCue?.audioFilePath) {
-            cancelAnimationFrame(animationRef.current!);
+            if (animationRef.current) cancelAnimationFrame(animationRef.current);
             return;
         }
 
         const draw = () => {
+            // 1. Update Time
+            setCurrentTime(AudioEngine.getCurrentTime());
+            const d = AudioEngine.getDuration();
+            if (d > 0) setDuration(d);
+
+            // 2. Draw Waveform
             const canvas = canvasRef.current;
-            if (!canvas) return;
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    const dataArray = AudioEngine.getWaveformData();
+                    if (dataArray) {
+                        const width = canvas.width;
+                        const height = canvas.height;
 
-            const ctx = canvas.getContext('2d');
-            if (!ctx) return;
+                        ctx.clearRect(0, 0, width, height);
+                        ctx.lineWidth = 2;
+                        ctx.strokeStyle = '#10b981'; // emerald-500
+                        ctx.beginPath();
 
-            const dataArray = AudioEngine.getWaveformData();
-            if (!dataArray) {
-                 animationRef.current = requestAnimationFrame(draw);
-                 return;
-            }
+                        const sliceWidth = width * 1.0 / dataArray.length;
+                        let x = 0;
 
-            const width = canvas.width;
-            const height = canvas.height;
+                        for (let i = 0; i < dataArray.length; i++) {
+                            const v = dataArray[i] / 128.0;
+                            const y = v * height / 2;
 
-            ctx.clearRect(0, 0, width, height);
-
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = '#10b981'; // emerald-500
-            ctx.beginPath();
-
-            const sliceWidth = width * 1.0 / dataArray.length;
-            let x = 0;
-
-            for (let i = 0; i < dataArray.length; i++) {
-                const v = dataArray[i] / 128.0;
-                const y = v * height / 2;
-
-                if (i === 0) {
-                    ctx.moveTo(x, y);
-                } else {
-                    ctx.lineTo(x, y);
+                            if (i === 0) {
+                                ctx.moveTo(x, y);
+                            } else {
+                                ctx.lineTo(x, y);
+                            }
+                            x += sliceWidth;
+                        }
+                        ctx.lineTo(canvas.width, canvas.height / 2);
+                        ctx.stroke();
+                    }
                 }
-
-                x += sliceWidth;
             }
-
-            ctx.lineTo(canvas.width, canvas.height / 2);
-            ctx.stroke();
 
             animationRef.current = requestAnimationFrame(draw);
         };
@@ -68,6 +76,12 @@ export const ActiveCueDisplay: React.FC = () => {
             }
         };
     }, [activeCueId, activeCue?.audioFilePath]);
+
+    const formatTime = (seconds: number) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    };
 
     return (
         <div className="flex flex-col items-center justify-center py-10 text-center relative w-full h-full">
@@ -87,6 +101,21 @@ export const ActiveCueDisplay: React.FC = () => {
                     <div className="text-slate-400 font-medium italic mt-4 z-10">
                         "Start of Production"
                     </div>
+
+                    {activeCue.audioFilePath && (
+                        <div className="z-10 w-64 mt-6">
+                             <div className="flex justify-between text-xs font-mono text-slate-400 mb-1">
+                                <span>{formatTime(currentTime)}</span>
+                                <span>{formatTime(duration)}</span>
+                             </div>
+                             <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                <div
+                                    className="bg-emerald-500 h-full transition-all duration-100 ease-linear"
+                                    style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+                                />
+                             </div>
+                        </div>
+                    )}
 
                     {/* Waveform Visualization Overlay */}
                     {activeCue.audioFilePath && (
