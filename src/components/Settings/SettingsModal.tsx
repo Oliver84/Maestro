@@ -11,7 +11,7 @@ interface SettingsModalProps {
 type TabType = 'general' | 'channels';
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
-    const { settings, setX32Ip, setAudioDevice, setSimulationMode } = useAppStore();
+    const { settings, setX32Ip, setAudioDevice, setSimulationMode, setShowImage } = useAppStore();
     const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
     const [activeTab, setActiveTab] = useState<TabType>('general');
 
@@ -41,8 +41,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                     <button
                         onClick={() => setActiveTab('general')}
                         className={`px-6 py-3 text-sm font-medium transition-colors ${activeTab === 'general'
-                                ? 'text-emerald-400 border-b-2 border-emerald-400'
-                                : 'text-slate-400 hover:text-slate-200'
+                            ? 'text-emerald-400 border-b-2 border-emerald-400'
+                            : 'text-slate-400 hover:text-slate-200'
                             }`}
                     >
                         General
@@ -50,8 +50,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                     <button
                         onClick={() => setActiveTab('channels')}
                         className={`px-6 py-3 text-sm font-medium transition-colors ${activeTab === 'channels'
-                                ? 'text-emerald-400 border-b-2 border-emerald-400'
-                                : 'text-slate-400 hover:text-slate-200'
+                            ? 'text-emerald-400 border-b-2 border-emerald-400'
+                            : 'text-slate-400 hover:text-slate-200'
                             }`}
                     >
                         X32 Channels
@@ -119,6 +119,58 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                                         </option>
                                     ))}
                                 </select>
+                            </div>
+
+                            {/* Show Image */}
+                            <div>
+                                <label className="block text-sm font-medium mb-2 text-slate-300">
+                                    Show Image (Album Cover)
+                                </label>
+                                <div className="flex gap-4 items-start">
+                                    {settings.showImage && (
+                                        <div className="w-20 h-20 rounded bg-slate-950 border border-slate-700 overflow-hidden flex-shrink-0">
+                                            <img
+                                                src={settings.showImage}
+                                                alt="Show Cover"
+                                                className="w-full h-full object-cover"
+                                            />
+                                        </div>
+                                    )}
+                                    <div className="flex-1">
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={(e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file) {
+                                                    const reader = new FileReader();
+                                                    reader.onloadend = () => {
+                                                        setShowImage(reader.result as string);
+                                                    };
+                                                    reader.readAsDataURL(file);
+                                                }
+                                            }}
+                                            className="block w-full text-sm text-slate-400
+                                                file:mr-4 file:py-2 file:px-4
+                                                file:rounded-full file:border-0
+                                                file:text-sm file:font-semibold
+                                                file:bg-emerald-950 file:text-emerald-400
+                                                hover:file:bg-emerald-900
+                                                cursor-pointer"
+                                        />
+                                        <p className="text-xs text-slate-500 mt-2">
+                                            Upload an image to display as the background for the active cue.
+                                        </p>
+                                        {settings.showImage && (
+                                            <button
+                                                onClick={() => setShowImage('')}
+                                                className="text-xs text-red-400 hover:text-red-300 mt-2 underline"
+                                            >
+                                                Remove Image
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}

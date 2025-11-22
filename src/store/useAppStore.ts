@@ -26,6 +26,7 @@ export interface AppSettings {
     x32Ip: string;
     audioDeviceId: string;
     simulationMode: boolean;
+    showImage?: string;
 }
 
 interface AppState {
@@ -40,6 +41,7 @@ interface AppState {
     setAudioDevice: (id: string) => void;
     setX32Ip: (ip: string) => void;
     setSimulationMode: (enabled: boolean) => void;
+    setShowImage: (image: string) => void;
     setX32Channels: (channels: X32Channel[]) => void;
     setSelectedChannels: (channelNumbers: number[]) => void;
     updateChannelFader: (channelNumber: number, level: number) => void;
@@ -76,6 +78,7 @@ export const useAppStore = create<AppState>()(
             setAudioDevice: (id) => set((state) => ({ settings: { ...state.settings, audioDeviceId: id } })),
             setX32Ip: (ip) => set((state) => ({ settings: { ...state.settings, x32Ip: ip } })),
             setSimulationMode: (enabled) => set((state) => ({ settings: { ...state.settings, simulationMode: enabled } })),
+            setShowImage: (image: string) => set((state) => ({ settings: { ...state.settings, showImage: image } })),
 
             setX32Channels: (channels) => set({ x32Channels: channels }),
             setSelectedChannels: (channelNumbers) => set({ selectedChannelIds: channelNumbers }),

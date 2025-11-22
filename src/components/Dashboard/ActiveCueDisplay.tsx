@@ -2,13 +2,26 @@ import React from 'react';
 import { useAppStore } from '../../store/useAppStore';
 
 export const ActiveCueDisplay: React.FC = () => {
-    const { cues, activeCueId } = useAppStore();
+    const { cues, activeCueId, settings } = useAppStore();
     const activeCue = cues.find(c => c.id === activeCueId);
 
     return (
-        <div className="flex flex-col items-center py-6 text-center relative w-full h-[420px]">
+        <div className="flex flex-col items-center py-6 text-center relative w-full h-[420px] overflow-hidden rounded-xl border border-slate-800/50 bg-slate-900/30 backdrop-blur-sm">
+            {/* Show Background Image */}
+            {settings.showImage && (
+                <div className="absolute inset-0 z-0">
+                    <img
+                        src={settings.showImage}
+                        alt="Show Background"
+                        className="w-full h-full object-cover opacity-100 scale-100"
+                    />
+                    <div className="absolute inset-0 bg-slate-950/40" />
+                    <div className="absolute inset-0 bg-gradient-to-b from-slate-950/20 via-transparent to-slate-950/80" />
+                </div>
+            )}
+
             {/* Ambient Background Glow */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none z-0" />
 
             <h3 className="text-slate-500 font-bold tracking-[0.2em] text-xs uppercase mb-8 z-10">Current Cue</h3>
 
