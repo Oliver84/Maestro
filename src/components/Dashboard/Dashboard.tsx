@@ -1,16 +1,18 @@
 import React from 'react';
 import { ActiveCueDisplay } from './ActiveCueDisplay';
-import { NextCueCard } from './NextCueCard';
+import { GoButton } from './GoButton';
 import { TransportControls } from './TransportControls';
 import { LastFired } from './LastFired';
 
 export const Dashboard: React.FC = () => {
     return (
-        <div className="flex-1 p-6 flex flex-col">
+        <div className="flex-1 p-6 flex flex-col gap-4">
             <ActiveCueDisplay />
-            <NextCueCard />
-            <TransportControls />
-            <LastFired />
+            <div className="mt-auto space-y-4">
+                <GoButton />
+                <TransportControls />
+                <LastFired />
+            </div>
         </div>
     );
 };
