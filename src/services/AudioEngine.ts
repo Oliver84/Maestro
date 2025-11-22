@@ -1,4 +1,4 @@
-import { Howl } from 'howler';
+import { Howl, Howler } from 'howler';
 
 export interface AudioPlaybackOptions {
     volume?: number; // 0.0 to 1.0
@@ -11,12 +11,41 @@ class AudioEngineService {
     private currentHowl: Howl | null = null;
     private currentDeviceId: string = 'default';
     private masterVolume: number = 1.0;
+    public analyser: AnalyserNode | null = null;
+    private bufferLength: number = 0;
+    private dataArray: Uint8Array | null = null;
+
+    constructor() {
+        this.setupAnalyser();
+    }
+
+    private setupAnalyser() {
+        if (Howler.ctx) {
+            this.analyser = Howler.ctx.createAnalyser();
+            this.analyser.fftSize = 2048;
+            // Connect Howler's master gain to the analyser
+            Howler.masterGain.connect(this.analyser);
+            // Connect analyser to destination so we can hear it
+            this.analyser.connect(Howler.ctx.destination);
+
+            this.bufferLength = this.analyser.frequencyBinCount;
+            this.dataArray = new Uint8Array(this.bufferLength);
+        } else {
+            console.warn('[Audio Engine] Web Audio API not available in Howler context yet.');
+        }
+    }
+
+    getWaveformData(): Uint8Array | null {
+        if (this.analyser && this.dataArray) {
+            this.analyser.getByteTimeDomainData(this.dataArray);
+            return this.dataArray;
+        }
+        return null;
+    }
 
     setDeviceId(deviceId: string) {
         this.currentDeviceId = deviceId;
         console.log(`[Audio Engine] Audio device set to: ${deviceId}`);
-        // Implementation of sinkId setting will depend on Howler/WebAudio support
-        // For now, we just store it.
     }
 
     setMasterVolume(volume: number) {
@@ -28,13 +57,18 @@ class AudioEngineService {
     }
 
     play(filePath: string, options: AudioPlaybackOptions = {}) {
+        // Ensure analyser is set up (sometimes Howler.ctx inits lazily)
+        if (!this.analyser) {
+            this.setupAnalyser();
+        }
+
         // Stop previous if any
         if (this.currentHowl) {
             this.currentHowl.stop();
             this.currentHowl.unload();
         }
 
-        // In Electron, we might need to prefix with file:// if not already
+        // In Electron, we ensure the file protocol is present
         const src = filePath.startsWith('file://') || filePath.startsWith('http')
             ? filePath
             : `file://${filePath}`;
@@ -46,7 +80,8 @@ class AudioEngineService {
         this.currentHowl = new Howl({
             src: [src],
             volume,
-            html5: true, // Use HTML5 Audio for streaming large files
+            html5: false, // IMPORTANT: html5: true uses HTML5 Audio element which bypasses Web Audio API (so no analyser). Set to false for Web Audio.
+            format: ['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a'], // Hints for Howler
             loop: options.loop || false,
             onend: () => {
                 console.log(`[Audio Engine] Playback finished: ${filePath}`);
@@ -68,14 +103,6 @@ class AudioEngineService {
                 }
             }
         });
-
-        // Attempt to set sinkId if supported on the internal audio node
-        // @ts-ignore
-        if (this.currentHowl._sounds[0]?._node && typeof this.currentHowl._sounds[0]._node.setSinkId === 'function') {
-            // @ts-ignore
-            this.currentHowl._sounds[0]._node.setSinkId(this.currentDeviceId)
-                .catch((e: any) => console.error('[Audio Engine] Failed to set audio device', e));
-        }
 
         this.currentHowl.play();
     }
