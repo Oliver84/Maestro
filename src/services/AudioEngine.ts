@@ -3,20 +3,25 @@ import { Howl, Howler } from 'howler';
 export interface AudioPlaybackOptions {
     volume?: number; // 0.0 to 1.0
     loop?: boolean;
+    cueId?: string; // Track which cue this sound belongs to
     onEnd?: () => void;
     onError?: (error: any) => void;
 }
 
-class AudioEngineService {
-    // Track active sounds. Map<src, Howl> or just a Set<Howl>.
-    // We use Set because multiple instances of same src might theoretically play,
-    // though in this app cue paths are keys.
-    private activeSounds: Set<Howl> = new Set();
+export interface ActiveSound {
+    cueId: string;
+    filePath: string;
+    howl: Howl;
+    startTime: number; // When this sound started playing
+}
+
+export class AudioEngineService {
+    // Track active sounds with metadata
+    private activeSounds: Map<string, ActiveSound> = new Map();
 
     // We track the "primary" or "last fired" sound for progress display purposes
-    private primaryHowl: Howl | null = null;
+    private primaryCueId: string | null = null;
 
-    private currentDeviceId: string = 'default';
     private masterVolume: number = 1.0;
     public analyser: AnalyserNode | null = null;
     private bufferLength: number = 0;
@@ -44,7 +49,7 @@ class AudioEngineService {
 
     getWaveformData(): Uint8Array | null {
         if (this.analyser && this.dataArray) {
-            this.analyser.getByteTimeDomainData(this.dataArray);
+            this.analyser.getByteTimeDomainData(this.dataArray as any);
             return this.dataArray;
         }
         return null;
@@ -52,22 +57,17 @@ class AudioEngineService {
 
     getFrequencyData(): Uint8Array | null {
         if (this.analyser && this.dataArray) {
-            this.analyser.getByteFrequencyData(this.dataArray);
+            this.analyser.getByteFrequencyData(this.dataArray as any);
             return this.dataArray;
         }
         return null;
     }
 
-    setDeviceId(deviceId: string) {
-        this.currentDeviceId = deviceId;
-        console.log(`[Audio Engine] Audio device set to: ${deviceId}`);
-    }
-
     setMasterVolume(volume: number) {
         this.masterVolume = Math.max(0, Math.min(1, volume));
         // Update all active sounds
-        this.activeSounds.forEach(sound => {
-            sound.volume(this.masterVolume);
+        this.activeSounds.forEach(activeSound => {
+            activeSound.howl.volume(this.masterVolume);
         });
         console.log(`[Audio Engine] Master volume set to: ${this.masterVolume}`);
     }
@@ -96,8 +96,9 @@ class AudioEngineService {
         }
 
         const volume = options.volume !== undefined ? options.volume : this.masterVolume;
+        const cueId = options.cueId || `sound-${Date.now()}`;
 
-        console.log(`[Audio Engine] Playing: ${src} at volume ${volume}`);
+        console.log(`[Audio Engine] Playing: ${src} (cue: ${cueId}) at volume ${volume}`);
 
         const sound = new Howl({
             src: [src],
@@ -107,32 +108,39 @@ class AudioEngineService {
             loop: options.loop || false,
             onend: () => {
                 console.log(`[Audio Engine] Playback finished: ${src}`);
-                this.activeSounds.delete(sound);
-                if (this.primaryHowl === sound) {
-                    this.primaryHowl = null;
+                this.activeSounds.delete(cueId);
+                if (this.primaryCueId === cueId) {
+                    this.primaryCueId = null;
                 }
                 if (options.onEnd) {
                     options.onEnd();
                 }
             },
-            onloaderror: (id, error) => {
+            onloaderror: (_id, error) => {
                 console.error(`[Audio Engine] Load error for ${src}:`, error);
-                this.activeSounds.delete(sound);
+                this.activeSounds.delete(cueId);
                 if (options.onError) {
                     options.onError(error);
                 }
             },
-            onplayerror: (id, error) => {
+            onplayerror: (_id, error) => {
                 console.error(`[Audio Engine] Play error for ${src}:`, error);
-                this.activeSounds.delete(sound);
+                this.activeSounds.delete(cueId);
                 if (options.onError) {
                     options.onError(error);
                 }
             }
         });
 
-        this.activeSounds.add(sound);
-        this.primaryHowl = sound;
+        const activeSound: ActiveSound = {
+            cueId,
+            filePath: src,
+            howl: sound,
+            startTime: Date.now()
+        };
+
+        this.activeSounds.set(cueId, activeSound);
+        this.primaryCueId = cueId;
         sound.play();
     }
 
@@ -140,15 +148,20 @@ class AudioEngineService {
         const duration = 300;
         console.log('[Audio Engine] Stopping all playback with fade out');
 
-        this.activeSounds.forEach(sound => {
-            sound.fade(sound.volume(), 0, duration);
+        // Create a snapshot of current sounds to stop
+        const soundsToStop = Array.from(this.activeSounds.values());
+
+        soundsToStop.forEach(activeSound => {
+            activeSound.howl.fade(activeSound.howl.volume(), 0, duration);
             setTimeout(() => {
-                sound.stop();
-                sound.unload();
-                this.activeSounds.delete(sound);
+                activeSound.howl.stop();
+                activeSound.howl.unload();
+                // Remove from map after actually stopping
+                this.activeSounds.delete(activeSound.cueId);
             }, duration);
         });
-        this.primaryHowl = null;
+
+        this.primaryCueId = null;
     }
 
     isPlaying(): boolean {
@@ -156,19 +169,104 @@ class AudioEngineService {
         return this.activeSounds.size > 0;
     }
 
+    getActiveSounds(): ActiveSound[] {
+        return Array.from(this.activeSounds.values());
+    }
+
     getCurrentTime(): number {
         // Return time of the "primary" (most recently fired) sound
-        if (this.primaryHowl) {
-            return this.primaryHowl.seek() as number;
+        const primarySound = this.primaryCueId ? this.activeSounds.get(this.primaryCueId) : null;
+        if (primarySound) {
+            return primarySound.howl.seek() as number;
+        }
+        return 0;
+    }
+
+    getTimeForCue(cueId: string): number {
+        const sound = this.activeSounds.get(cueId);
+        if (sound) {
+            return sound.howl.seek() as number;
         }
         return 0;
     }
 
     getDuration(): number {
-        if (this.primaryHowl) {
-            return this.primaryHowl.duration();
+        const primarySound = this.primaryCueId ? this.activeSounds.get(this.primaryCueId) : null;
+        if (primarySound) {
+            return primarySound.howl.duration();
         }
         return 0;
+    }
+
+    getDurationForCue(cueId: string): number {
+        const sound = this.activeSounds.get(cueId);
+        if (sound) {
+            return sound.howl.duration();
+        }
+        return 0;
+    }
+
+    seek(time: number) {
+        const primarySound = this.primaryCueId ? this.activeSounds.get(this.primaryCueId) : null;
+        if (primarySound) {
+            primarySound.howl.seek(time);
+        }
+    }
+
+    seekCue(cueId: string, time: number) {
+        const sound = this.activeSounds.get(cueId);
+        if (sound) {
+            sound.howl.seek(time);
+        }
+    }
+
+    getActiveBuffer(): AudioBuffer | null {
+        const primarySound = this.primaryCueId ? this.activeSounds.get(this.primaryCueId) : null;
+        if (primarySound) {
+            return this.getBufferForHowl(primarySound.howl);
+        }
+        return null;
+    }
+
+    getBufferForCue(cueId: string): AudioBuffer | null {
+        const sound = this.activeSounds.get(cueId);
+        if (sound) {
+            return this.getBufferForHowl(sound.howl);
+        }
+        return null;
+    }
+
+    private getBufferForHowl(howl: Howl): AudioBuffer | null {
+        const h = howl as any;
+        // Check the main cached buffer on the Howl instance (standard Howler v2)
+        if (h._buffer) {
+            return h._buffer;
+        }
+        // Fallback: Check internal sound nodes
+        if (h._sounds && h._sounds.length > 0) {
+            for (const sound of h._sounds) {
+                if (sound._node && sound._node.buffer) {
+                    return sound._node.buffer;
+                }
+            }
+        }
+        return null;
+    }
+
+    getAudioContext(): AudioContext | null {
+        return Howler.ctx || null;
+    }
+
+    static resolvePath(filePath: string): string {
+        let src = filePath;
+        if (!filePath.startsWith('http') && !filePath.startsWith('media://')) {
+            if (filePath.startsWith('file://')) {
+                src = filePath.replace('file://', 'media://');
+            } else {
+                src = `media://${filePath.startsWith('/') ? '' : '/'}${filePath}`;
+            }
+        }
+        return src;
     }
 }
 

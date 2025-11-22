@@ -1,14 +1,30 @@
-import React, { useState, DragEvent } from 'react';
+import React, { useState, DragEvent, useEffect } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { Music, Trash2, X, Layers, StopCircle } from 'lucide-react';
+import { InlineWaveform } from './InlineWaveform';
+import { AudioEngine } from '../../services/AudioEngine';
 
 export const CueList: React.FC = () => {
-    const { cues, activeCueId, fireCue, addCue, updateCue, deleteCue, selectedCueId, selectCue } = useAppStore();
+    const { cues, fireCue, addCue, updateCue, deleteCue, selectedCueId, selectCue } = useAppStore();
     const [isDraggingOverList, setIsDraggingOverList] = useState(false);
     const [dragOverCueId, setDragOverCueId] = useState<string | null>(null);
     const [editingCueId, setEditingCueId] = useState<string | null>(null);
     const [editingSnippetId, setEditingSnippetId] = useState<string | null>(null);
     const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
+    const [playingCueIds, setPlayingCueIds] = useState<Set<string>>(new Set());
+
+    // Track which cues are actually playing audio
+    useEffect(() => {
+        const updatePlayingCues = () => {
+            const activeSounds = AudioEngine.getActiveSounds();
+            const playingIds = new Set(activeSounds.map(sound => sound.cueId));
+            setPlayingCueIds(playingIds);
+            requestAnimationFrame(updatePlayingCues);
+        };
+        const animationId = requestAnimationFrame(updatePlayingCues);
+        return () => cancelAnimationFrame(animationId);
+    }, []);
+
 
     const handleDragOverList = (e: DragEvent<HTMLDivElement>) => {
         e.preventDefault();
@@ -150,7 +166,7 @@ export const CueList: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-800/50">
                     {cues.map((cue) => {
-                        const isActive = activeCueId === cue.id; // Playing
+                        const isActive = playingCueIds.has(cue.id); // Actually playing audio
                         const isSelected = selectedCueId === cue.id; // Selected/Next
                         const isDragTarget = dragOverCueId === cue.id;
                         const isEditingTitle = editingCueId === cue.id;
@@ -159,14 +175,16 @@ export const CueList: React.FC = () => {
 
                         // Logic for type display
                         let type = 'CUE';
-                        if (cue.audioFilePath && cue.snippetId) type = 'MIXED';
+                        const hasSnippet = cue.snippetId !== null && cue.snippetId !== undefined;
+
+                        if (cue.audioFilePath && hasSnippet) type = 'MIXED';
                         else if (cue.audioFilePath) type = 'SONG';
-                        else if (cue.snippetId) type = 'SNIPPET';
+                        else if (hasSnippet) type = 'SNIPPET';
 
                         const typeColor = type === 'SONG' ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' :
-                                          type === 'SNIPPET' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' :
-                                          type === 'MIXED' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' :
-                                          'bg-slate-700/20 text-slate-400 border-slate-700/30';
+                            type === 'SNIPPET' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' :
+                                type === 'MIXED' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' :
+                                    'bg-slate-700/20 text-slate-400 border-slate-700/30';
 
                         const isOverlap = cue.playbackMode === 'OVERLAP';
 
@@ -181,8 +199,8 @@ export const CueList: React.FC = () => {
                                 }}
                                 className={`group transition-colors cursor-pointer border-l-4
                                     ${isActive ? 'bg-emerald-900/20 border-emerald-500' :
-                                      isSelected ? 'bg-slate-800 border-blue-500' :
-                                      'hover:bg-slate-800/30 border-transparent'}
+                                        isSelected ? 'bg-slate-800 border-blue-500' :
+                                            'hover:bg-slate-800/30 border-transparent'}
                                     ${isDragTarget ? '!bg-emerald-900/30 ring-1 ring-emerald-500/50' : ''}
                                 `}
                                 onClick={() => handleRowClick(cue.id)}
@@ -192,7 +210,7 @@ export const CueList: React.FC = () => {
                                 onDrop={(e) => handleDropOnRow(e, cue.id)}
                             >
                                 <td className="px-6 py-4 font-mono text-slate-400 group-hover:text-slate-200 text-lg">
-                                    SQ {cue.sequence}
+                                    CUE {cue.sequence}
                                 </td>
                                 <td className="px-6 py-4" onClick={stopProp}>
                                     {isEditingTitle ? (
@@ -226,7 +244,7 @@ export const CueList: React.FC = () => {
                                                     value={cue.scene || ''}
                                                     onChange={(e) => updateCue(cue.id, { scene: e.target.value })}
                                                     onBlur={() => setEditingSceneId(null)}
-                                                    onKeyDown={(e) => { if(e.key === 'Enter') setEditingSceneId(null); }}
+                                                    onKeyDown={(e) => { if (e.key === 'Enter') setEditingSceneId(null); }}
                                                 />
                                             ) : (
                                                 cue.scene || "Click to set scene"
@@ -254,6 +272,17 @@ export const CueList: React.FC = () => {
                                                 <span>{isOverlap ? 'LAYER' : 'STOP & GO'}</span>
                                             </button>
                                         </div>
+
+                                        {/* Inline Waveform Progress - Always shown if audio file exists */}
+                                        {cue.audioFilePath && (
+                                            <div className="mt-2">
+                                                <InlineWaveform
+                                                    cueId={cue.id}
+                                                    audioFilePath={cue.audioFilePath}
+                                                    isActive={isActive}
+                                                />
+                                            </div>
+                                        )}
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 text-sm text-slate-400 italic font-serif" onClick={stopProp}>
@@ -263,17 +292,20 @@ export const CueList: React.FC = () => {
                                             type="number"
                                             className="bg-slate-950 text-white px-2 py-1 rounded border border-emerald-500 outline-none w-20"
                                             placeholder="#"
-                                            value={cue.snippetId || ''}
-                                            onChange={(e) => updateCue(cue.id, { snippetId: e.target.value ? parseInt(e.target.value) : null })}
+                                            value={cue.snippetId ?? ''}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                updateCue(cue.id, { snippetId: val === '' ? null : parseInt(val) });
+                                            }}
                                             onBlur={() => setEditingSnippetId(null)}
-                                            onKeyDown={(e) => { if(e.key === 'Enter') setEditingSnippetId(null); }}
+                                            onKeyDown={(e) => { if (e.key === 'Enter') setEditingSnippetId(null); }}
                                         />
                                     ) : (
                                         <div
                                             className="cursor-text hover:text-emerald-400 border border-transparent hover:border-slate-700 rounded px-2 py-1"
                                             onClick={() => setEditingSnippetId(cue.id)}
                                         >
-                                            {cue.snippetId ? `Snippet ${cue.snippetId}` : '-'}
+                                            {cue.snippetId !== null && cue.snippetId !== undefined ? `Snippet ${cue.snippetId}` : '-'}
                                         </div>
                                     )}
                                 </td>

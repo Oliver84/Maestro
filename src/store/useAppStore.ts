@@ -188,13 +188,19 @@ export const useAppStore = create<AppState>()(
                 import('../services/AudioEngine').then(({ AudioEngine }) => {
                     // Handle Playback Mode for ALL cues
                     // If mode is STOP_AND_GO (or undefined/default), stop previous sounds.
+                    console.log(`[Store] Playback mode for "${cue.title}": ${cue.playbackMode || 'undefined (defaults to STOP_AND_GO)'}`);
+
                     if (cue.playbackMode !== 'OVERLAP') {
+                        console.log('[Store] Stopping all previous audio (STOP_AND_GO mode)');
                         AudioEngine.stopAll();
+                    } else {
+                        console.log('[Store] Keeping previous audio playing (OVERLAP mode)');
                     }
 
                     // Play audio if file path is specified
                     if (cue.audioFilePath) {
                         AudioEngine.play(cue.audioFilePath, {
+                            cueId: cue.id,
                             volume: cue.audioVolume,
                             onEnd: () => {
                                 console.log(`[Store] Audio finished for cue: ${cue.title}`);

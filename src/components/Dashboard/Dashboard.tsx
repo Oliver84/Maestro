@@ -8,9 +8,15 @@ export const Dashboard: React.FC = () => {
     return (
         <div className="flex-1 p-6 flex flex-col gap-4">
             <ActiveCueDisplay />
-            <div className="mt-auto space-y-4">
-                <GoButton />
-                <TransportControls />
+            <div className="mt-auto flex gap-4 items-stretch h-40">
+                <div className="flex-1 min-w-0">
+                    <GoButton />
+                </div>
+                <div className="w-24 shrink-0">
+                    <TransportControls />
+                </div>
+            </div>
+            <div className="mt-4">
                 <LastFired />
             </div>
         </div>
