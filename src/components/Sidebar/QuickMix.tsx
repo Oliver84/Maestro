@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Volume2, Save } from 'lucide-react';
+import { Volume2 } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { getOscClient } from '../../services/OscClient';
 import { throttle } from '../../utils/throttle';
@@ -19,28 +19,24 @@ export const QuickMix: React.FC = () => {
 
   const [dragging, setDragging] = useState<number | null>(null);
   const [mode, setMode] = useState<'LIVE' | 'EDIT'>('LIVE');
-  const [draftState, setDraftState] = useState<Record<number, { faderLevel: number, muted: boolean }>>({});
   const faderRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
   const oscClient = useMemo(() => getOscClient(), []);
 
   const selectedCue = useMemo(() => cues.find(c => c.id === selectedCueId), [cues, selectedCueId]);
 
-  // Sync draft state when entering Edit mode or selecting a different cue
+  // Ensure cue has channel state when entering edit mode
   useEffect(() => {
     if (mode === 'EDIT' && selectedCue) {
-      if (selectedCue.channelState) {
-        // Load saved state
-        setDraftState({ ...selectedCue.channelState });
-      } else {
-        // Snapshot current live state
+      if (!selectedCue.channelState) {
+        // Snapshot current live state and save immediately
         const snapshot: Record<number, { faderLevel: number, muted: boolean }> = {};
         x32Channels.forEach(ch => {
           snapshot[ch.number] = { faderLevel: ch.faderLevel, muted: ch.muted };
         });
-        setDraftState(snapshot);
+        updateCue(selectedCue.id, { channelState: snapshot });
       }
     }
-  }, [mode, selectedCueId, selectedCue, x32Channels]);
+  }, [mode, selectedCueId, selectedCue, x32Channels, updateCue]);
 
   // Reset mode if no cue is selected
   useEffect(() => {
@@ -48,19 +44,6 @@ export const QuickMix: React.FC = () => {
       setMode('LIVE');
     }
   }, [selectedCueId, mode]);
-
-  // Check if dirty
-  const isDirty = useMemo(() => {
-    if (mode !== 'EDIT' || !selectedCue) return false;
-
-    const savedState = selectedCue.channelState || {};
-
-    // Compare draft with saved
-    // Note: This simple check assumes keys are consistent.
-    // If snapshot brings in new keys that aren't in saved, it might flag dirty, which is correct (new data to save).
-    // But if saved is undefined, and we have a draft, it's definitely dirty.
-    return JSON.stringify(draftState) !== JSON.stringify(savedState);
-  }, [mode, selectedCue, draftState]);
 
   // Get selected channels from store
   const displayChannels = x32Channels.filter(ch =>
@@ -75,31 +58,46 @@ export const QuickMix: React.FC = () => {
     [oscClient]
   );
 
-  const handleSave = () => {
-    if (selectedCueId && mode === 'EDIT') {
-      updateCue(selectedCueId, { channelState: draftState });
-      // Flash feedback or just rely on the dirty indicator disappearing?
-      // Dirty indicator will disappear automatically because savedState now equals draftState
-    }
-  };
+  // Create throttled function for updating cue state (save to disk)
+  // Throttling to avoid excessive writes/renders while dragging
+  const throttledUpdateCue = useMemo(
+    () => throttle((cueId: string, channelNum: number, level: number) => {
+      // We need to fetch fresh state to avoid overwriting other channels?
+      // Actually, we can't easily access fresh state inside throttle callback if it's a closure.
+      // But updateCue merges updates. Wait, updateCue updates the whole cue object.
+      // If we pass a function to updateCue... the store implementation does:
+      // cues: state.cues.map((cue) => cue.id === id ? { ...cue, ...data } : cue)
+      // We need to construct the full channelState object.
+
+      // Since this is tricky inside a throttle, let's update the store directly in the handler
+      // and rely on zustand's performance. But persisting on every drag event is heavy.
+      // Let's persist the final value on mouse up?
+      // Or just throttle the persist.
+
+      // For simplicity and correctness, let's update on every event for now.
+      // If performance is bad, we can optimize.
+    }, 100),
+    []
+  );
 
   const handleLevelChange = (channelNum: number, newLevel: number) => {
     if (mode === 'LIVE') {
-      // Update store immediately for responsive UI
       updateChannelFader(channelNum, newLevel);
-      // Send OSC command (throttled)
       throttledSendFader(channelNum, newLevel);
       console.log(`[QuickMix] Channel ${channelNum} fader: ${newLevel.toFixed(2)}`);
     } else {
-      // Edit Mode: Update draft only
-      setDraftState(prev => ({
-        ...prev,
-        [channelNum]: {
-          ...prev[channelNum],
-          faderLevel: newLevel,
-          muted: prev[channelNum]?.muted ?? false // Preserve mute or default
-        }
-      }));
+      // Edit Mode: Auto-save
+      if (selectedCue) {
+        const currentChannelState = selectedCue.channelState || {};
+        const newState = {
+            ...currentChannelState,
+            [channelNum]: {
+                faderLevel: newLevel,
+                muted: currentChannelState[channelNum]?.muted ?? false
+            }
+        };
+        updateCue(selectedCue.id, { channelState: newState });
+      }
     }
   };
 
@@ -140,17 +138,20 @@ export const QuickMix: React.FC = () => {
         console.log(`[QuickMix] Channel ${channelNum} mute: ${newMutedState ? 'MUTED' : 'ON'}`);
       }
     } else {
-      // Edit Mode
-      setDraftState(prev => {
-        const current = prev[channelNum] || { faderLevel: 0, muted: false };
-        return {
-          ...prev,
-          [channelNum]: {
-            ...current,
-            muted: !current.muted
-          }
+      // Edit Mode: Auto-save
+      if (selectedCue) {
+        const currentChannelState = selectedCue.channelState || {};
+        const currentSettings = currentChannelState[channelNum] || { faderLevel: 0, muted: false };
+
+        const newState = {
+            ...currentChannelState,
+            [channelNum]: {
+                ...currentSettings,
+                muted: !currentSettings.muted
+            }
         };
-      });
+        updateCue(selectedCue.id, { channelState: newState });
+      }
     }
   };
 
@@ -172,13 +173,11 @@ export const QuickMix: React.FC = () => {
       return { level: channel.faderLevel, muted: channel.muted };
     }
     // Edit Mode
-    const draft = draftState[channel.number];
-    // If channel not in draft (e.g. newly added channel), fallback to live or zero?
-    // Logic says we initialized draft with snapshot, so it should be there.
-    // Fallback to 0/false if something weird happens.
+    const savedState = selectedCue?.channelState?.[channel.number];
+    // If not saved yet, use live values (snapshot logic above handles initial save, but for render safety fallback)
     return {
-      level: draft?.faderLevel ?? 0,
-      muted: draft?.muted ?? false
+      level: savedState?.faderLevel ?? channel.faderLevel,
+      muted: savedState?.muted ?? channel.muted
     };
   };
 
@@ -238,17 +237,6 @@ export const QuickMix: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Save Button */}
-          {mode === 'EDIT' && isDirty && (
-            <button
-              onClick={handleSave}
-              className="flex items-center gap-1 px-2 py-0.5 bg-amber-600 hover:bg-amber-500 text-white text-[9px] font-bold rounded animate-pulse"
-            >
-              <Save size={10} />
-              SAVE
-            </button>
-          )}
-
           {settings.simulationMode ? (
             <span className="text-[9px] text-amber-500 font-bold">Sim</span>
           ) : (

@@ -277,6 +277,17 @@ export const useAppStore = create<AppState>()(
 
                     // Apply saved channel state if present
                     if (cue.channelState) {
+                        // Optimistically update store to reflect changes in UI immediately
+                        set((state) => ({
+                            x32Channels: state.x32Channels.map(ch => {
+                                const savedState = cue.channelState![ch.number];
+                                if (savedState) {
+                                    return { ...ch, faderLevel: savedState.faderLevel, muted: savedState.muted };
+                                }
+                                return ch;
+                            })
+                        }));
+
                         Object.entries(cue.channelState).forEach(([channelNumStr, state]) => {
                             const channelNum = parseInt(channelNumStr);
                             if (!isNaN(channelNum)) {
