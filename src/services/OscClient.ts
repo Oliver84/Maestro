@@ -19,7 +19,7 @@ export class BrowserOscClient {
 
         // Setup Listener for Incoming OSC Messages
         if (window.ipcRenderer) {
-            window.ipcRenderer.on('osc-message', (event: any, msg: any[]) => {
+            window.ipcRenderer.on('osc-message', (_event: any, msg: any[]) => {
                 this.handleOscMessage(msg);
             });
         }
@@ -27,6 +27,7 @@ export class BrowserOscClient {
 
     setSimulationMode(enabled: boolean) {
         this.simulationMode = enabled;
+        console.log(`[OSC Client] Simulation mode set to: ${enabled}`);
     }
 
     setLogCallback(callback: (msg: string) => void) {
@@ -38,6 +39,12 @@ export class BrowserOscClient {
      */
     connect(): void {
         this.isConnected = true;
+
+        // Initialize Electron-side OSC Client if available
+        if (window.ipcRenderer) {
+            window.ipcRenderer.setX32Ip(this.host);
+        }
+
         console.log(`[OSC Client] Connected to X32 at ${this.host}:${this.port}`);
         this.startHeartbeat();
         this.startMeterPolling();
@@ -152,14 +159,14 @@ export class BrowserOscClient {
                 return;
             }
 
-             // Parse Channel Name: /ch/01/config/name <value>
-             const nameMatch = typeof address === 'string' ? address.match(/^\/ch\/(\d+)\/config\/name$/) : null;
-             if (nameMatch) {
-                 const channelNum = parseInt(nameMatch[1], 10);
-                 const value = args[0] as string;
-                 store.updateChannelFromOsc(channelNum, 'name', value);
-                 return;
-             }
+            // Parse Channel Name: /ch/01/config/name <value>
+            const nameMatch = typeof address === 'string' ? address.match(/^\/ch\/(\d+)\/config\/name$/) : null;
+            if (nameMatch) {
+                const channelNum = parseInt(nameMatch[1], 10);
+                const value = args[0] as string;
+                store.updateChannelFromOsc(channelNum, 'name', value);
+                return;
+            }
         });
     }
 

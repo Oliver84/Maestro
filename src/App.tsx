@@ -41,6 +41,13 @@ function App() {
     }
   }, [settings.x32Ip])
 
+  // Sync Audio Device with AudioEngine
+  useEffect(() => {
+    import('./services/AudioEngine').then(({ AudioEngine }) => {
+      AudioEngine.setOutputDevice(settings.audioDeviceId);
+    });
+  }, [settings.audioDeviceId]);
+
   // Global Keyboard Navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -78,6 +85,13 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectNextCue, selectPreviousCue, fireCue, selectedCueId]);
 
+  const handleConnectX32 = () => {
+    import('./services/OscClient').then(({ getOscClient }) => {
+      const client = getOscClient();
+      client.updateConnection(settings.x32Ip);
+    });
+  };
+
   return (
     <div className="flex flex-col h-screen w-screen bg-slate-950 text-slate-100 font-sans overflow-hidden">
       {/* Global Header */}
@@ -94,15 +108,18 @@ function App() {
           {/* Status Indicators */}
           <div className="flex items-center gap-4 text-xs font-bold tracking-wider">
             <div className="flex items-center gap-2 text-slate-400 bg-slate-800/50 px-3 py-1.5 rounded border border-slate-700">
-              <div className="w-2 h-2 rounded-full bg-slate-500" />
-              X32 CONSOLE WAITING...
+              <div className={`w-2 h-2 rounded-full ${settings.simulationMode ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+              {settings.simulationMode ? 'SIMULATION MODE' : 'X32 READY'}
             </div>
           </div>
 
           <div className="h-8 w-px bg-slate-800" />
 
           <div className="flex items-center gap-3">
-            <button className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-sm font-medium transition-colors flex items-center gap-2">
+            <button
+              onClick={handleConnectX32}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-sm font-medium transition-colors flex items-center gap-2"
+            >
               <Wifi size={16} />
               Connect X32
             </button>

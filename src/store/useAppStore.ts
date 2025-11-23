@@ -89,9 +89,24 @@ export const useAppStore = create<AppState>()(
             channelMeters: {},
             selectedChannelIds: [],
 
-            setAudioDevice: (id) => set((state) => ({ settings: { ...state.settings, audioDeviceId: id } })),
-            setX32Ip: (ip) => set((state) => ({ settings: { ...state.settings, x32Ip: ip } })),
-            setSimulationMode: (enabled) => set((state) => ({ settings: { ...state.settings, simulationMode: enabled } })),
+            setAudioDevice: (id) => {
+                set((state) => ({ settings: { ...state.settings, audioDeviceId: id } }));
+                import('../services/AudioEngine').then(({ AudioEngine }) => {
+                    AudioEngine.setOutputDevice(id);
+                });
+            },
+            setX32Ip: (ip) => {
+                set((state) => ({ settings: { ...state.settings, x32Ip: ip } }));
+                import('../services/OscClient').then(({ getOscClient }) => {
+                    getOscClient().updateConnection(ip);
+                });
+            },
+            setSimulationMode: (enabled) => {
+                set((state) => ({ settings: { ...state.settings, simulationMode: enabled } }));
+                import('../services/OscClient').then(({ getOscClient }) => {
+                    getOscClient().setSimulationMode(enabled);
+                });
+            },
             setShowImage: (image: string) => set((state) => ({ settings: { ...state.settings, showImage: image } })),
 
             setX32Channels: (channels) => set({ x32Channels: channels }),

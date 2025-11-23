@@ -47,6 +47,21 @@ export class AudioEngineService {
         }
     }
 
+    async setOutputDevice(deviceId: string) {
+        if (Howler.ctx && (Howler.ctx as any).setSinkId) {
+            try {
+                // 'default' is the standard ID for the default device
+                const sinkId = deviceId === 'default' ? '' : deviceId;
+                await (Howler.ctx as any).setSinkId(sinkId);
+                console.log(`[Audio Engine] Output device set to: ${deviceId}`);
+            } catch (error) {
+                console.error('[Audio Engine] Failed to set output device:', error);
+            }
+        } else {
+            console.warn('[Audio Engine] setSinkId not supported in this environment');
+        }
+    }
+
     getWaveformData(): Uint8Array | null {
         if (this.analyser && this.dataArray) {
             this.analyser.getByteTimeDomainData(this.dataArray as any);
