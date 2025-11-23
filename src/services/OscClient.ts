@@ -181,7 +181,7 @@ export class BrowserOscClient {
 
         // Always use IPC if available, regardless of "simulationMode" flag logic used for other things.
         // If we are in Electron, we want to use the main process socket.
-        if (window.ipcRenderer) {
+        if (window.ipcRenderer && !this.simulationMode) {
             // Use Electron IPC for real UDP transport
             window.ipcRenderer.sendOsc(address, ...args);
         }

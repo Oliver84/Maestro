@@ -59,27 +59,7 @@ export const QuickMix: React.FC = () => {
     [oscClient]
   );
 
-  // Create throttled function for updating cue state (save to disk)
-  // Throttling to avoid excessive writes/renders while dragging
-  const throttledUpdateCue = useMemo(
-    () => throttle((cueId: string, channelNum: number, level: number) => {
-      // We need to fetch fresh state to avoid overwriting other channels?
-      // Actually, we can't easily access fresh state inside throttle callback if it's a closure.
-      // But updateCue merges updates. Wait, updateCue updates the whole cue object.
-      // If we pass a function to updateCue... the store implementation does:
-      // cues: state.cues.map((cue) => cue.id === id ? { ...cue, ...data } : cue)
-      // We need to construct the full channelState object.
 
-      // Since this is tricky inside a throttle, let's update the store directly in the handler
-      // and rely on zustand's performance. But persisting on every drag event is heavy.
-      // Let's persist the final value on mouse up?
-      // Or just throttle the persist.
-
-      // For simplicity and correctness, let's update on every event for now.
-      // If performance is bad, we can optimize.
-    }, 100),
-    []
-  );
 
   const handleLevelChange = (channelNum: number, newLevel: number) => {
     if (mode === 'LIVE') {
@@ -265,8 +245,8 @@ export const QuickMix: React.FC = () => {
               <div className="flex flex-col items-center gap-0.5 mb-1 w-full">
                 {/* Channel Number Badge */}
                 <div className={`flex items-center justify-center w-4 h-4 rounded border shadow-sm transition-colors ${muted
-                    ? 'bg-slate-950 border-slate-900'
-                    : 'bg-slate-800 border-slate-700'
+                  ? 'bg-slate-950 border-slate-900'
+                  : 'bg-slate-800 border-slate-700'
                   }`}>
                   <span className={`text-[9px] font-black ${muted ? 'text-slate-700' : 'text-slate-300'}`}>{channel.number}</span>
                 </div>
