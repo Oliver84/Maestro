@@ -63,6 +63,7 @@ interface AppState {
     setShowImage: (image: string) => void;
     setShowToasts: (enabled: boolean) => void;
     setX32Channels: (channels: X32Channel[]) => void;
+    initializeEmptyChannels: () => void;
     setSelectedChannels: (channelNumbers: number[]) => void;
     updateChannelFader: (channelNumber: number, level: number) => void;
     updateChannelMute: (channelNumber: number, muted: boolean) => void;
@@ -137,6 +138,17 @@ export const useAppStore = create<AppState>()(
 
             setX32Channels: (channels) => set({ x32Channels: channels }),
             setSelectedChannels: (channelNumbers) => set({ selectedChannelIds: channelNumbers }),
+
+            initializeEmptyChannels: () => set((state) => {
+                if (state.x32Channels.length === 32) return {}; // Already initialized
+                const emptyChannels: X32Channel[] = Array.from({ length: 32 }, (_, i) => ({
+                    number: i + 1,
+                    name: `Ch ${i + 1}`,
+                    faderLevel: 0,
+                    muted: true
+                }));
+                return { x32Channels: emptyChannels };
+            }),
 
             updateChannelFader: (channelNumber, level) => set((state) => ({
                 x32Channels: state.x32Channels.map(ch =>
@@ -497,9 +509,9 @@ export const useAppStore = create<AppState>()(
             partialize: (state) => ({
                 cues: state.cues,
                 settings: state.settings,
-                selectedCueId: state.selectedCueId, // Persist selection too
-                // Don't persist logs to keep storage clean on reload, or maybe we should? 
-                // User didn't specify, but usually logs are ephemeral. Let's not persist for now.
+                selectedCueId: state.selectedCueId,
+                x32Channels: state.x32Channels,
+                selectedChannelIds: state.selectedChannelIds,
             }),
         }
     )

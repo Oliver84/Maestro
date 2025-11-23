@@ -64,18 +64,29 @@ export class AudioEngineService {
         }
     }
 
+    private desiredDeviceId: string = '';
+
     async setOutputDevice(deviceId: string) {
+        this.desiredDeviceId = deviceId;
+
         if (Howler.ctx && (Howler.ctx as any).setSinkId) {
             try {
                 // 'default' is the standard ID for the default device
                 const sinkId = deviceId === 'default' ? '' : deviceId;
+
+                // Check if we're already on this device
+                if ((Howler.ctx as any).sinkId === sinkId) {
+                    console.log(`[Audio Engine] Already on device: ${deviceId}`);
+                    return;
+                }
+
                 await (Howler.ctx as any).setSinkId(sinkId);
                 console.log(`[Audio Engine] Output device set to: ${deviceId}`);
             } catch (error) {
                 console.error('[Audio Engine] Failed to set output device:', error);
             }
         } else {
-            console.warn('[Audio Engine] setSinkId not supported in this environment');
+            console.warn('[Audio Engine] setSinkId not supported or AudioContext not ready');
         }
     }
 
@@ -106,10 +117,26 @@ export class AudioEngineService {
 
     play(filePath: string, options: AudioPlaybackOptions = {}) {
         // Force AudioContext to resume (Chrome/Electron autoplay policy)
-        if (Howler.ctx && Howler.ctx.state === 'suspended') {
-            Howler.ctx.resume().then(() => {
-                console.log('[Audio Engine] AudioContext resumed');
-            });
+
+        if (Howler.ctx) {
+            if (Howler.ctx.state === 'suspended') {
+                Howler.ctx.resume().then(() => {
+                    console.log('[Audio Engine] AudioContext resumed');
+                });
+            }
+
+            // Ensure output device is correct
+            if (this.desiredDeviceId && (Howler.ctx as any).setSinkId) {
+                const currentSinkId = (Howler.ctx as any).sinkId;
+                const desiredSinkId = this.desiredDeviceId === 'default' ? '' : this.desiredDeviceId;
+
+                if (currentSinkId !== desiredSinkId) {
+                    console.log(`[Audio Engine] Enforcing output device: ${this.desiredDeviceId}`);
+                    (Howler.ctx as any).setSinkId(desiredSinkId).catch((err: any) => {
+                        console.error('[Audio Engine] Failed to enforce output device:', err);
+                    });
+                }
+            }
         }
 
         // Ensure analyser is set up (sometimes Howler.ctx inits lazily)

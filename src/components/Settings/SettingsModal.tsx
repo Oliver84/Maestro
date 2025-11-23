@@ -139,6 +139,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                                         </option>
                                     ))}
                                 </select>
+                                <div className="mt-2 flex justify-end">
+                                    <button
+                                        onClick={() => {
+                                            import('../../services/AudioEngine').then(({ AudioEngine }) => {
+                                                // Play a simple test tone or sound
+                                                // Since we don't have a dedicated test tone file, we'll just log for now
+                                                // or try to play a beep if we can generate one.
+                                                // Actually, let's just use a known file if available, or just a console log + toast
+                                                console.log('[Settings] Testing Audio Output...');
+                                                // Create a simple oscillator beep
+                                                const ctx = AudioEngine.getAudioContext();
+                                                if (ctx) {
+                                                    const osc = ctx.createOscillator();
+                                                    const gain = ctx.createGain();
+                                                    osc.connect(gain);
+                                                    gain.connect(ctx.destination);
+                                                    osc.frequency.value = 440;
+                                                    gain.gain.value = 0.1;
+                                                    osc.start();
+                                                    setTimeout(() => osc.stop(), 500);
+                                                }
+                                            });
+                                        }}
+                                        className="text-xs text-emerald-400 hover:text-emerald-300 underline"
+                                    >
+                                        Test Audio Output (Beep)
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Show Image */}

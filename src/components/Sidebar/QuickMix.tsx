@@ -3,7 +3,66 @@ import { Volume2 } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { getOscClient } from '../../services/OscClient';
 import { throttle } from '../../utils/throttle';
-import { faderToDb } from '../../utils/audioMath';
+import { faderToDb, dbToFader } from '../../utils/audioMath';
+
+const FaderValueInput: React.FC<{
+  level: number;
+  onCommit: (newLevel: number) => void;
+  mode: 'LIVE' | 'EDIT';
+}> = ({ level, onCommit, mode }) => {
+  const [text, setText] = useState(faderToDb(level));
+  const [isEditing, setIsEditing] = useState(false);
+
+  useEffect(() => {
+    if (!isEditing) {
+      setText(faderToDb(level));
+    }
+  }, [level, isEditing]);
+
+  const handleCommit = () => {
+    setIsEditing(false);
+
+    // Handle -oo special case
+    if (text.toLowerCase().includes('oo') || text.toLowerCase().includes('inf')) {
+      onCommit(0);
+      setText('-oo dB');
+      return;
+    }
+
+    const clean = text.replace(/[^\d.-]/g, '');
+    let db = parseFloat(clean);
+
+    if (isNaN(db)) {
+      setText(faderToDb(level)); // Revert
+      return;
+    }
+
+    // Clamp
+    db = Math.max(-90, Math.min(10, db));
+
+    const newLevel = dbToFader(db);
+    onCommit(newLevel);
+  };
+
+  return (
+    <input
+      type="text"
+      className={`text-[8px] font-mono font-medium tracking-tight bg-transparent text-center w-full border border-transparent hover:border-slate-700 focus:border-emerald-500 focus:bg-slate-900 focus:outline-none rounded px-0.5 transition-colors ${mode === 'EDIT' ? 'text-amber-500' : 'text-slate-500'}`}
+      value={text}
+      onFocus={(e) => {
+        setIsEditing(true);
+        e.target.select();
+      }}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={handleCommit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.currentTarget.blur();
+        }
+      }}
+    />
+  );
+};
 
 export const QuickMix: React.FC = () => {
   const {
@@ -251,10 +310,12 @@ export const QuickMix: React.FC = () => {
                   <span className={`text-[9px] font-black ${muted ? 'text-slate-700' : 'text-slate-300'}`}>{channel.number}</span>
                 </div>
 
-                {/* Level Value */}
-                <div className={`text-[8px] font-mono font-medium tracking-tight ${mode === 'EDIT' ? 'text-amber-500' : 'text-slate-500'}`}>
-                  {faderToDb(level)}
-                </div>
+                {/* Level Value Input */}
+                <FaderValueInput
+                  level={level}
+                  onCommit={(newLevel) => handleLevelChange(channel.number, newLevel)}
+                  mode={mode}
+                />
               </div>
 
               {/* Fader + Meter Group */}

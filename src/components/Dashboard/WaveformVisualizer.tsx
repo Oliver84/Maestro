@@ -61,7 +61,18 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({
 
         // Cache the waveform for future use
         if (audioFilePath) {
-            AudioEngine.cacheWaveform(audioFilePath, normalizedPoints);
+            // Use the resolved path for caching to match AudioEngine's internal keys
+            // We need to access the static method or public method. 
+            // AudioEngine instance doesn't expose resolvePath as public in the interface I saw?
+            // Wait, it was static in the class but I'm using the instance 'AudioEngine'.
+            // Let's check the file content of AudioEngine.ts again.
+            // It is `static resolvePath`.
+            // So I should use AudioEngineService.resolvePath(audioFilePath)
+
+            // Actually, let's just use the instance method if I add one, or import the class.
+            // The file imports `AudioEngine` (instance) and `AudioEngineService` (class).
+            const resolvedPath = AudioEngineService.resolvePath(audioFilePath);
+            AudioEngine.cacheWaveform(resolvedPath, normalizedPoints);
         }
     };
 
@@ -77,7 +88,60 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({
         }
     }, [activeCueId, playbackMode]);
 
-    // ... (useEffect for fetching remains mostly the same, just calls generateWaveform which now sets duration)
+    // Fetch audio data
+    useEffect(() => {
+        if (!activeCueId || !audioFilePath) return;
+        if (processedCueId === activeCueId && waveformPoints.length > 0) return;
+        if (isFetchingRef.current) return;
+
+        const resolvedPath = AudioEngineService.resolvePath(audioFilePath);
+
+        // 1. Check Waveform Cache
+        const cachedPoints = AudioEngine.getCachedWaveform(resolvedPath);
+        if (cachedPoints) {
+            console.log('[WaveformVisualizer] Using cached waveform for:', audioFilePath);
+            setWaveformPoints(cachedPoints);
+            setProcessedCueId(activeCueId);
+            return;
+        }
+
+        // 2. Check Buffer Cache
+        const cachedBuffer = AudioEngine.getCachedBuffer(resolvedPath);
+        if (cachedBuffer) {
+            console.log('[WaveformVisualizer] Using cached buffer for:', audioFilePath);
+            generateWaveform(cachedBuffer);
+            return;
+        }
+
+        // 3. Check Active Playing Sound Buffer (Fastest if already playing)
+        const activeBuffer = AudioEngine.getBufferForCue(activeCueId);
+        if (activeBuffer) {
+            console.log('[WaveformVisualizer] Using active sound buffer for:', activeCueId);
+            generateWaveform(activeBuffer);
+            // Also cache it for next time
+            AudioEngine.cacheWaveform(resolvedPath, waveformPoints); // Wait, waveformPoints isn't set yet. generateWaveform sets it.
+            // generateWaveform handles caching now.
+            return;
+        }
+
+        // 4. Fetch if not cached
+        isFetchingRef.current = true;
+        console.log('[WaveformVisualizer] Fetching audio for waveform:', resolvedPath);
+
+        fetch(resolvedPath)
+            .then(response => response.arrayBuffer())
+            .then(arrayBuffer => {
+                const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+                return audioContext.decodeAudioData(arrayBuffer);
+            })
+            .then(audioBuffer => {
+                generateWaveform(audioBuffer);
+            })
+            .catch(err => {
+                console.error('[WaveformVisualizer] Error loading audio:', err);
+                isFetchingRef.current = false;
+            });
+    }, [activeCueId, audioFilePath, processedCueId, waveformPoints.length]);
 
     // Drawing Loop – only renders the waveform / progress bar
     useEffect(() => {

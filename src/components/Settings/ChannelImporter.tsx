@@ -1,21 +1,41 @@
 import React, { useState } from 'react';
 import { RefreshCw, Check } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
-import type { X32Channel } from '../../store/useAppStore';
+
 
 export const ChannelImporter: React.FC = () => {
-    const { x32Channels, selectedChannelIds, setSelectedChannels, settings } = useAppStore();
+    const { x32Channels, selectedChannelIds, setSelectedChannels, settings, initializeEmptyChannels } = useAppStore();
     const [discovering, setDiscovering] = useState(false);
     const [selectedForImport, setSelectedForImport] = useState<number[]>(selectedChannelIds);
 
     const handleDiscover = async () => {
         setDiscovering(true);
 
-        // Simulate discovery delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Initialize empty channels first so we have something to update
+        initializeEmptyChannels();
 
-        // In simulation mode, channels are already loaded from mockData
-        // In real mode, this would query the X32
+        if (settings.simulationMode) {
+            // Simulate discovery delay
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        } else {
+            // Real Mode: Query X32
+            import('../../services/OscClient').then(({ getOscClient }) => {
+                const client = getOscClient();
+
+                // Loop through all 32 channels and request info
+                for (let i = 1; i <= 32; i++) {
+                    // Stagger requests slightly to avoid flooding
+                    setTimeout(() => {
+                        client.getChannelName(i);
+                        client.getChannelFader(i);
+                        client.getChannelMute(i);
+                    }, i * 20);
+                }
+            });
+
+            // Wait a bit for responses to come in
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        }
 
         setDiscovering(false);
     };
@@ -100,14 +120,14 @@ export const ChannelImporter: React.FC = () => {
                                         key={channel.number}
                                         onClick={() => toggleChannelSelection(channel.number)}
                                         className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors ${isSelected
-                                                ? 'bg-emerald-500/20 border border-emerald-500/40'
-                                                : 'bg-slate-800/50 border border-slate-700/50 hover:bg-slate-800'
+                                            ? 'bg-emerald-500/20 border border-emerald-500/40'
+                                            : 'bg-slate-800/50 border border-slate-700/50 hover:bg-slate-800'
                                             }`}
                                     >
                                         {/* Checkbox */}
                                         <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${isSelected
-                                                ? 'bg-emerald-500 border-emerald-500'
-                                                : 'border-slate-600'
+                                            ? 'bg-emerald-500 border-emerald-500'
+                                            : 'border-slate-600'
                                             }`}>
                                             {isSelected && <Check size={14} className="text-white" />}
                                         </div>
