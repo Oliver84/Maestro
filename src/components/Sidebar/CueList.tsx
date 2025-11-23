@@ -173,16 +173,9 @@ export const CueList: React.FC = () => {
     // Prevent cue firing when clicking on inputs
     const stopProp = (e: React.MouseEvent) => e.stopPropagation();
 
-    // Handle Row Click: Selects the cue (for Go logic) and fires if needed (double click? or just separate selection)
-    // Standard Show Control: Click selects (Blue). Spacebar Fires (Green).
-    // But we also kept the "Click to Fire" logic in previous steps.
-    // Let's make Click -> Select. Double Click -> Fire? Or keep single click fire but update selection?
-    // The user requested "Navigate up/down... space bar to go".
-    // Usually, clicking a row should SELECT it (Next).
+    // Handle Row Click: Selects the cue (for Go logic)
     const handleRowClick = (id: string) => {
-        if (!editingCueId && !editingSnippetId && !editingSceneId) {
-            selectCue(id);
-        }
+        selectCue(id);
     };
 
     return (
@@ -250,10 +243,11 @@ export const CueList: React.FC = () => {
                                 <td className="px-3 py-2 font-mono text-slate-400 group-hover:text-amber-400 text-xl font-black text-center transition-colors">
                                     {cue.sequence}
                                 </td>
-                                <td className="px-4 py-2" onClick={stopProp}>
+                                <td className="px-4 py-2">
                                     {isEditingTitle ? (
                                         <input
                                             autoFocus
+                                            onClick={stopProp}
                                             className="bg-slate-950 text-white font-bold text-base px-2 py-0.5 rounded border border-emerald-500 outline-none w-full"
                                             value={cue.title}
                                             onChange={(e) => updateCue(cue.id, { title: e.target.value })}
@@ -277,6 +271,7 @@ export const CueList: React.FC = () => {
                                             {isEditingScene ? (
                                                 <input
                                                     autoFocus
+                                                    onClick={stopProp}
                                                     className="bg-slate-950 text-slate-300 px-1 py-0.5 rounded border border-emerald-500 outline-none w-32"
                                                     placeholder="Scene Name"
                                                     value={cue.scene || ''}
