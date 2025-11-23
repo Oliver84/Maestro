@@ -43,7 +43,7 @@ export interface AppSettings {
     showToasts?: boolean;
 }
 
-interface AppState {
+export interface AppState {
     cues: Cue[];
     activeCueId: string | null;
     selectedCueId: string | null;
@@ -56,6 +56,11 @@ interface AppState {
     x32Channels: X32Channel[];
     channelMeters: Record<number, number>;
     selectedChannelIds: number[];
+    currentShowFilePath: string | null;
+
+    loadShowState: (state: Partial<AppState>) => void;
+    resetShowState: () => void;
+    setCurrentShowFilePath: (path: string | null) => void;
 
     setAudioDevice: (id: string) => void;
     setX32Ip: (ip: string) => void;
@@ -114,6 +119,38 @@ export const useAppStore = create<AppState>()(
             x32Channels: [],
             channelMeters: {},
             selectedChannelIds: [],
+            currentShowFilePath: null,
+
+            loadShowState: (loadedState) => set((state) => ({
+                cues: loadedState.cues || [],
+                settings: { ...state.settings, ...loadedState.settings },
+                x32Channels: loadedState.x32Channels || [],
+                selectedChannelIds: loadedState.selectedChannelIds || [],
+                // Reset runtime state
+                activeCueId: null,
+                selectedCueId: loadedState.cues && loadedState.cues.length > 0 ? loadedState.cues[0].id : null,
+                lastFiredAt: 0,
+                showStartTime: null,
+                showPausedTime: 0,
+                showPausedAt: null,
+                isPaused: false,
+            })),
+
+            resetShowState: () => set(() => ({
+                cues: [],
+                activeCueId: null,
+                selectedCueId: null,
+                lastFiredAt: 0,
+                showStartTime: null,
+                showPausedTime: 0,
+                showPausedAt: null,
+                isPaused: false,
+                x32Channels: [], // Will be re-initialized by initializeEmptyChannels if needed, or we can do it here
+                selectedChannelIds: [],
+                currentShowFilePath: null,
+            })),
+
+            setCurrentShowFilePath: (path) => set({ currentShowFilePath: path }),
 
             setAudioDevice: (id) => {
                 set((state) => ({ settings: { ...state.settings, audioDeviceId: id } }));
@@ -512,6 +549,10 @@ export const useAppStore = create<AppState>()(
                 selectedCueId: state.selectedCueId,
                 x32Channels: state.x32Channels,
                 selectedChannelIds: state.selectedChannelIds,
+                // We do NOT persist currentShowFilePath automatically via zustand-persist 
+                // because we want to ensure the user explicitly saves/loads. 
+                // However, for better UX, we might want to remember the last open show.
+                // For now, let's NOT persist it to avoid confusion if the file moves.
             }),
         }
     )

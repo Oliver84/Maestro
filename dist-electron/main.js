@@ -1,541 +1,426 @@
-import { protocol, ipcMain, app, BrowserWindow, net, dialog } from "electron";
-import { fileURLToPath } from "node:url";
-import path from "node:path";
-import { createSocket } from "node:dgram";
-import { EventEmitter } from "node:events";
-const typeTags = {
+import { protocol as k, ipcMain as d, app as m, BrowserWindow as R, net as x, dialog as E } from "electron";
+import { fileURLToPath as N } from "node:url";
+import f from "node:path";
+import { createSocket as C } from "node:dgram";
+import { EventEmitter as $ } from "node:events";
+const S = {
   s: "string",
   f: "float",
   i: "integer",
   b: "blob"
 };
-class Argument {
-  constructor(type, value) {
-    this.type = type;
-    this.value = value;
+class w {
+  constructor(e, n) {
+    this.type = e, this.value = n;
   }
 }
-class Message {
-  constructor(address, ...args) {
-    this.oscType = "message";
-    this.address = address;
-    this.args = args;
+class L {
+  constructor(e, ...n) {
+    this.oscType = "message", this.address = e, this.args = n;
   }
-  append(arg) {
-    let argOut;
-    switch (typeof arg) {
+  append(e) {
+    let n;
+    switch (typeof e) {
       case "object":
-        if (arg instanceof Array) {
-          arg.forEach((a) => this.append(a));
-        } else if (arg.type) {
-          if (typeTags[arg.type]) arg.type = typeTags[arg.type];
-          this.args.push(arg);
-        } else {
-          throw new Error(`don't know how to encode object ${arg}`);
-        }
+        if (e instanceof Array)
+          e.forEach((o) => this.append(o));
+        else if (e.type)
+          S[e.type] && (e.type = S[e.type]), this.args.push(e);
+        else
+          throw new Error(`don't know how to encode object ${e}`);
         break;
       case "number":
-        if (Math.floor(arg) === arg) {
-          argOut = new Argument("integer", arg);
-        } else {
-          argOut = new Argument("float", arg);
-        }
+        Math.floor(e) === e ? n = new w("integer", e) : n = new w("float", e);
         break;
       case "string":
-        argOut = new Argument("string", arg);
+        n = new w("string", e);
         break;
       case "boolean":
-        argOut = new Argument("boolean", arg);
+        n = new w("boolean", e);
         break;
       default:
-        throw new Error(`don't know how to encode ${arg}`);
+        throw new Error(`don't know how to encode ${e}`);
     }
-    if (argOut) this.args.push(argOut);
+    n && this.args.push(n);
   }
 }
-function padString(str) {
-  const nullTerminated = str + "\0";
-  const padding = 4 - nullTerminated.length % 4;
-  return nullTerminated + "\0".repeat(padding === 4 ? 0 : padding);
+function p(t) {
+  const e = t + "\0", n = 4 - e.length % 4;
+  return e + "\0".repeat(n === 4 ? 0 : n);
 }
-function readString(buffer, offset) {
-  let end = offset;
-  while (end < buffer.length && buffer[end] !== 0) {
-    end++;
+function B(t, e) {
+  let n = e;
+  for (; n < t.length && t[n] !== 0; )
+    n++;
+  const o = t.subarray(e, n).toString("utf8"), s = Math.ceil((n - e + 1) / 4) * 4;
+  return { value: o, offset: e + s };
+}
+function g(t) {
+  const e = Buffer.alloc(4);
+  return e.writeInt32BE(t, 0), e;
+}
+function v(t, e) {
+  return { value: t.readInt32BE(e), offset: e + 4 };
+}
+function y(t) {
+  const e = Buffer.alloc(4);
+  return e.writeFloatBE(t, 0), e;
+}
+function V(t, e) {
+  return { value: t.readFloatBE(e), offset: e + 4 };
+}
+function I(t) {
+  const e = t.length, n = g(e), o = 4 - e % 4, s = Buffer.alloc(o === 4 ? 0 : o);
+  return Buffer.concat([n, t, s]);
+}
+function z(t, e) {
+  const n = v(t, e), o = n.value, s = t.subarray(n.offset, n.offset + o), a = 4 - o % 4, r = n.offset + o + (a === 4 ? 0 : a);
+  return { value: s, offset: r };
+}
+function W(t) {
+  const e = Buffer.alloc(8);
+  if (typeof t == "number") {
+    const n = Math.floor(t), o = Math.floor((t - n) * 4294967296);
+    e.writeUInt32BE(n + 2208988800, 0), e.writeUInt32BE(o, 4);
+  } else
+    e.writeUInt32BE(0, 0), e.writeUInt32BE(1, 4);
+  return e;
+}
+function G(t, e) {
+  const n = t.readUInt32BE(e), o = t.readUInt32BE(e + 4);
+  let s;
+  if (n === 0 && o === 1)
+    s = 0;
+  else {
+    const a = n - 2208988800, r = o / 4294967296;
+    s = a + r;
   }
-  const str = buffer.subarray(offset, end).toString("utf8");
-  const paddedLength = Math.ceil((end - offset + 1) / 4) * 4;
-  return { value: str, offset: offset + paddedLength };
+  return { value: s, offset: e + 8 };
 }
-function writeInt32(value) {
-  const buffer = Buffer.alloc(4);
-  buffer.writeInt32BE(value, 0);
-  return buffer;
-}
-function readInt32(buffer, offset) {
-  const value = buffer.readInt32BE(offset);
-  return { value, offset: offset + 4 };
-}
-function writeFloat32(value) {
-  const buffer = Buffer.alloc(4);
-  buffer.writeFloatBE(value, 0);
-  return buffer;
-}
-function readFloat32(buffer, offset) {
-  const value = buffer.readFloatBE(offset);
-  return { value, offset: offset + 4 };
-}
-function writeBlob(value) {
-  const length = value.length;
-  const lengthBuffer = writeInt32(length);
-  const padding = 4 - length % 4;
-  const paddingBuffer = Buffer.alloc(padding === 4 ? 0 : padding);
-  return Buffer.concat([lengthBuffer, value, paddingBuffer]);
-}
-function readBlob(buffer, offset) {
-  const lengthResult = readInt32(buffer, offset);
-  const length = lengthResult.value;
-  const data = buffer.subarray(lengthResult.offset, lengthResult.offset + length);
-  const padding = 4 - length % 4;
-  const nextOffset = lengthResult.offset + length + (padding === 4 ? 0 : padding);
-  return { value: data, offset: nextOffset };
-}
-function writeTimeTag(value) {
-  const buffer = Buffer.alloc(8);
-  if (typeof value === "number") {
-    const seconds = Math.floor(value);
-    const fraction = Math.floor((value - seconds) * 4294967296);
-    buffer.writeUInt32BE(seconds + 2208988800, 0);
-    buffer.writeUInt32BE(fraction, 4);
-  } else {
-    buffer.writeUInt32BE(0, 0);
-    buffer.writeUInt32BE(1, 4);
-  }
-  return buffer;
-}
-function readTimeTag(buffer, offset) {
-  const seconds = buffer.readUInt32BE(offset);
-  const fraction = buffer.readUInt32BE(offset + 4);
-  let value;
-  if (seconds === 0 && fraction === 1) {
-    value = 0;
-  } else {
-    const unixSeconds = seconds - 2208988800;
-    const fractionalSeconds = fraction / 4294967296;
-    value = unixSeconds + fractionalSeconds;
-  }
-  return { value, offset: offset + 8 };
-}
-function writeMidi(value) {
-  const buffer = Buffer.alloc(4);
-  if (Buffer.isBuffer(value)) {
-    if (value.length !== 4) {
+function q(t) {
+  const e = Buffer.alloc(4);
+  if (Buffer.isBuffer(t)) {
+    if (t.length !== 4)
       throw new Error("MIDI message must be exactly 4 bytes");
-    }
-    value.copy(buffer);
-  } else if (typeof value === "object" && value !== null) {
-    buffer.writeUInt8(value.port || 0, 0);
-    buffer.writeUInt8(value.status || 0, 1);
-    buffer.writeUInt8(value.data1 || 0, 2);
-    buffer.writeUInt8(value.data2 || 0, 3);
-  } else {
+    t.copy(e);
+  } else if (typeof t == "object" && t !== null)
+    e.writeUInt8(t.port || 0, 0), e.writeUInt8(t.status || 0, 1), e.writeUInt8(t.data1 || 0, 2), e.writeUInt8(t.data2 || 0, 3);
+  else
     throw new Error("MIDI value must be a 4-byte Buffer or object with port, status, data1, data2 properties");
-  }
-  return buffer;
+  return e;
 }
-function readMidi(buffer, offset) {
-  if (offset + 4 > buffer.length) {
+function J(t, e) {
+  if (e + 4 > t.length)
     throw new Error("Not enough bytes for MIDI message");
-  }
-  const value = buffer.subarray(offset, offset + 4);
-  return { value, offset: offset + 4 };
+  return { value: t.subarray(e, e + 4), offset: e + 4 };
 }
-function encodeArgument(arg) {
-  if (typeof arg === "object" && arg.type && arg.value !== void 0) {
-    switch (arg.type) {
+function K(t) {
+  if (typeof t == "object" && t.type && t.value !== void 0)
+    switch (t.type) {
       case "i":
       case "integer":
-        return { tag: "i", data: writeInt32(arg.value) };
+        return { tag: "i", data: g(t.value) };
       case "f":
       case "float":
-        return { tag: "f", data: writeFloat32(arg.value) };
+        return { tag: "f", data: y(t.value) };
       case "s":
       case "string":
-        return { tag: "s", data: Buffer.from(padString(arg.value)) };
+        return { tag: "s", data: Buffer.from(p(t.value)) };
       case "b":
       case "blob":
-        return { tag: "b", data: writeBlob(arg.value) };
+        return { tag: "b", data: I(t.value) };
       case "d":
       case "double":
-        return { tag: "f", data: writeFloat32(arg.value) };
+        return { tag: "f", data: y(t.value) };
       case "T":
       case "boolean":
-        return arg.value ? { tag: "T", data: Buffer.alloc(0) } : { tag: "F", data: Buffer.alloc(0) };
+        return t.value ? { tag: "T", data: Buffer.alloc(0) } : { tag: "F", data: Buffer.alloc(0) };
       case "m":
       case "midi":
-        return { tag: "m", data: writeMidi(arg.value) };
+        return { tag: "m", data: q(t.value) };
       default:
-        throw new Error(`Unknown argument type: ${arg.type}`);
+        throw new Error(`Unknown argument type: ${t.type}`);
     }
-  }
-  switch (typeof arg) {
+  switch (typeof t) {
     case "number":
-      if (Number.isInteger(arg)) {
-        return { tag: "i", data: writeInt32(arg) };
-      } else {
-        return { tag: "f", data: writeFloat32(arg) };
-      }
+      return Number.isInteger(t) ? { tag: "i", data: g(t) } : { tag: "f", data: y(t) };
     case "string":
-      return { tag: "s", data: Buffer.from(padString(arg)) };
+      return { tag: "s", data: Buffer.from(p(t)) };
     case "boolean":
-      return arg ? { tag: "T", data: Buffer.alloc(0) } : { tag: "F", data: Buffer.alloc(0) };
+      return t ? { tag: "T", data: Buffer.alloc(0) } : { tag: "F", data: Buffer.alloc(0) };
     default:
-      if (Buffer.isBuffer(arg)) {
-        return { tag: "b", data: writeBlob(arg) };
-      }
-      throw new Error(`Don't know how to encode argument: ${arg}`);
+      if (Buffer.isBuffer(t))
+        return { tag: "b", data: I(t) };
+      throw new Error(`Don't know how to encode argument: ${t}`);
   }
 }
-function decodeArgument(tag, buffer, offset) {
-  switch (tag) {
+function H(t, e, n) {
+  switch (t) {
     case "i":
-      return readInt32(buffer, offset);
+      return v(e, n);
     case "f":
-      return readFloat32(buffer, offset);
+      return V(e, n);
     case "s":
-      return readString(buffer, offset);
+      return B(e, n);
     case "b":
-      return readBlob(buffer, offset);
+      return z(e, n);
     case "T":
-      return { value: true, offset };
+      return { value: !0, offset: n };
     case "F":
-      return { value: false, offset };
+      return { value: !1, offset: n };
     case "N":
-      return { value: null, offset };
+      return { value: null, offset: n };
     case "m":
-      return readMidi(buffer, offset);
+      return J(e, n);
     default:
-      throw new Error(`I don't understand the argument code ${tag}`);
+      throw new Error(`I don't understand the argument code ${t}`);
   }
 }
-function toBuffer(message) {
-  if (message.oscType === "bundle") {
-    return encodeBundleToBuffer(message);
-  } else {
-    return encodeMessageToBuffer(message);
-  }
+function _(t) {
+  return t.oscType === "bundle" ? O(t) : M(t);
 }
-function encodeMessageToBuffer(message) {
-  const address = padString(message.address);
-  const addressBuffer = Buffer.from(address);
-  const encodedArgs = message.args.map(encodeArgument);
-  const typeTags2 = "," + encodedArgs.map((arg) => arg.tag).join("");
-  const typeTagsBuffer = Buffer.from(padString(typeTags2));
-  const argumentBuffers = encodedArgs.map((arg) => arg.data);
-  return Buffer.concat([addressBuffer, typeTagsBuffer, ...argumentBuffers]);
+function M(t) {
+  const e = p(t.address), n = Buffer.from(e), o = t.args.map(K), s = "," + o.map((i) => i.tag).join(""), a = Buffer.from(p(s)), r = o.map((i) => i.data);
+  return Buffer.concat([n, a, ...r]);
 }
-function encodeBundleToBuffer(bundle) {
-  const bundleString = padString("#bundle");
-  const bundleStringBuffer = Buffer.from(bundleString);
-  const timetagBuffer = writeTimeTag(bundle.timetag);
-  const elementBuffers = bundle.elements.map((element) => {
-    let elementBuffer;
-    if (element.oscType === "bundle") {
-      elementBuffer = encodeBundleToBuffer(element);
-    } else {
-      elementBuffer = encodeMessageToBuffer(element);
-    }
-    const sizeBuffer = writeInt32(elementBuffer.length);
-    return Buffer.concat([sizeBuffer, elementBuffer]);
+function O(t) {
+  const e = p("#bundle"), n = Buffer.from(e), o = W(t.timetag), s = t.elements.map((a) => {
+    let r;
+    a.oscType === "bundle" ? r = O(a) : r = M(a);
+    const i = g(r.length);
+    return Buffer.concat([i, r]);
   });
-  return Buffer.concat([bundleStringBuffer, timetagBuffer, ...elementBuffers]);
+  return Buffer.concat([n, o, ...s]);
 }
-function fromBuffer(buffer) {
-  if (buffer.length >= 8 && buffer.subarray(0, 8).toString() === "#bundle\0") {
-    return decodeBundleFromBuffer(buffer);
-  } else {
-    return decodeMessageFromBuffer(buffer);
-  }
+function P(t) {
+  return t.length >= 8 && t.subarray(0, 8).toString() === "#bundle\0" ? X(t) : Q(t);
 }
-function decodeMessageFromBuffer(buffer) {
-  let offset = 0;
-  const addressResult = readString(buffer, offset);
-  const address = addressResult.value;
-  offset = addressResult.offset;
-  const typeTagsResult = readString(buffer, offset);
-  const typeTags2 = typeTagsResult.value;
-  offset = typeTagsResult.offset;
-  if (!typeTags2.startsWith(",")) {
+function Q(t) {
+  let e = 0;
+  const n = B(t, e), o = n.value;
+  e = n.offset;
+  const s = B(t, e), a = s.value;
+  if (e = s.offset, !a.startsWith(","))
     throw new Error("Malformed Packet");
-  }
-  const tags = typeTags2.slice(1);
-  const args = [];
-  for (const tag of tags) {
-    const argResult = decodeArgument(tag, buffer, offset);
-    args.push({ value: argResult.value });
-    offset = argResult.offset;
+  const r = a.slice(1), i = [];
+  for (const h of r) {
+    const T = H(h, t, e);
+    i.push({ value: T.value }), e = T.offset;
   }
   return {
     oscType: "message",
-    address,
-    args
+    address: o,
+    args: i
   };
 }
-function decodeBundleFromBuffer(buffer) {
-  let offset = 8;
-  const timetagResult = readTimeTag(buffer, offset);
-  const timetag = timetagResult.value;
-  offset = timetagResult.offset;
-  const elements = [];
-  while (offset < buffer.length) {
-    const sizeResult = readInt32(buffer, offset);
-    const size = sizeResult.value;
-    offset = sizeResult.offset;
-    const elementBuffer = buffer.subarray(offset, offset + size);
-    const element = fromBuffer(elementBuffer);
-    elements.push(element);
-    offset += size;
+function X(t) {
+  let e = 8;
+  const n = G(t, e), o = n.value;
+  e = n.offset;
+  const s = [];
+  for (; e < t.length; ) {
+    const a = v(t, e), r = a.value;
+    e = a.offset;
+    const i = t.subarray(e, e + r), h = P(i);
+    s.push(h), e += r;
   }
   return {
     oscType: "bundle",
-    timetag,
-    elements
+    timetag: o,
+    elements: s
   };
 }
-function sanitizeMessage(decoded) {
-  const message = [];
-  message.push(decoded.address);
-  decoded.args.forEach((arg) => {
-    message.push(arg.value);
-  });
-  return message;
+function U(t) {
+  const e = [];
+  return e.push(t.address), t.args.forEach((n) => {
+    e.push(n.value);
+  }), e;
 }
-function sanitizeBundle(decoded) {
-  decoded.elements = decoded.elements.map((element) => {
-    if (element.oscType === "bundle") return sanitizeBundle(element);
-    else if (element.oscType === "message") return sanitizeMessage(element);
-  });
-  return decoded;
+function j(t) {
+  return t.elements = t.elements.map((e) => {
+    if (e.oscType === "bundle") return j(e);
+    if (e.oscType === "message") return U(e);
+  }), t;
 }
-function decode(data, customFromBuffer = fromBuffer) {
-  const decoded = customFromBuffer(data);
-  if (decoded.oscType === "bundle") {
-    return sanitizeBundle(decoded);
-  } else if (decoded.oscType === "message") {
-    return sanitizeMessage(decoded);
-  } else {
-    throw new Error("Malformed Packet");
-  }
+function Y(t, e = P) {
+  const n = e(t);
+  if (n.oscType === "bundle")
+    return j(n);
+  if (n.oscType === "message")
+    return U(n);
+  throw new Error("Malformed Packet");
 }
-class Server extends EventEmitter {
-  constructor(port, host = "127.0.0.1", cb) {
-    super();
-    if (typeof host === "function") {
-      cb = host;
-      host = "127.0.0.1";
-    }
-    if (!cb) cb = () => {
-    };
-    let decoded;
-    this.port = port;
-    this.host = host;
-    this._sock = createSocket({
+class Z extends $ {
+  constructor(e, n = "127.0.0.1", o) {
+    super(), typeof n == "function" && (o = n, n = "127.0.0.1"), o || (o = () => {
+    });
+    let s;
+    this.port = e, this.host = n, this._sock = C({
       type: "udp4",
-      reuseAddr: true
-    });
-    this._sock.bind(port, host);
-    this._sock.on("listening", () => {
-      this.emit("listening");
-      cb();
-    });
-    this._sock.on("message", (msg, rinfo) => {
+      reuseAddr: !0
+    }), this._sock.bind(e, n), this._sock.on("listening", () => {
+      this.emit("listening"), o();
+    }), this._sock.on("message", (a, r) => {
       try {
-        decoded = decode(msg);
-      } catch (e) {
-        const error = new Error(`can't decode incoming message: ${e.message}`);
-        this.emit("error", error, rinfo);
+        s = Y(a);
+      } catch (i) {
+        const h = new Error(`can't decode incoming message: ${i.message}`);
+        this.emit("error", h, r);
         return;
       }
-      if (decoded.elements) {
-        this.emit("bundle", decoded, rinfo);
-      } else if (decoded) {
-        this.emit("message", decoded, rinfo);
-        this.emit(decoded[0], decoded, rinfo);
-      }
+      s.elements ? this.emit("bundle", s, r) : s && (this.emit("message", s, r), this.emit(s[0], s, r));
     });
   }
-  close(cb) {
-    this._sock.close(cb);
+  close(e) {
+    this._sock.close(e);
   }
 }
-class Client {
-  constructor(host, port) {
-    this.host = host;
-    this.port = port;
-    this._sock = createSocket({
+class ee {
+  constructor(e, n) {
+    this.host = e, this.port = n, this._sock = C({
       type: "udp4",
-      reuseAddr: true
+      reuseAddr: !0
     });
   }
-  close(cb) {
-    this._sock.close(cb);
+  close(e) {
+    this._sock.close(e);
   }
-  send(...args) {
-    let message = args[0];
-    let callback;
-    if (typeof args[args.length - 1] === "function") {
-      callback = args.pop();
-    } else {
-      callback = () => {
-      };
-    }
-    if (message instanceof Array) {
-      message = {
-        address: message[0],
-        args: message.splice(1)
-      };
-    }
-    let mes;
-    let buf;
+  send(...e) {
+    let n = e[0], o;
+    typeof e[e.length - 1] == "function" ? o = e.pop() : o = () => {
+    }, n instanceof Array && (n = {
+      address: n[0],
+      args: n.splice(1)
+    });
+    let s, a;
     try {
-      switch (typeof message) {
+      switch (typeof n) {
         case "object":
-          buf = toBuffer(message);
-          this._sock.send(buf, 0, buf.length, this.port, this.host, callback);
+          a = _(n), this._sock.send(a, 0, a.length, this.port, this.host, o);
           break;
         case "string":
-          mes = new Message(args[0]);
-          for (let i = 1; i < args.length; i++) {
-            mes.append(args[i]);
-          }
-          buf = toBuffer(mes);
-          this._sock.send(buf, 0, buf.length, this.port, this.host, callback);
+          s = new L(e[0]);
+          for (let r = 1; r < e.length; r++)
+            s.append(e[r]);
+          a = _(s), this._sock.send(a, 0, a.length, this.port, this.host, o);
           break;
         default:
           throw new TypeError("That Message Just Doesn't Seem Right");
       }
-    } catch (e) {
-      if (e.code !== "ERR_SOCKET_DGRAM_NOT_RUNNING") throw e;
-      const error = new ReferenceError("Cannot send message on closed socket.");
-      error.code = e.code;
-      callback(error);
+    } catch (r) {
+      if (r.code !== "ERR_SOCKET_DGRAM_NOT_RUNNING") throw r;
+      const i = new ReferenceError("Cannot send message on closed socket.");
+      i.code = r.code, o(i);
     }
   }
 }
-const __dirname$1 = path.dirname(fileURLToPath(import.meta.url));
-process.env.APP_ROOT = path.join(__dirname$1, "..");
-const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
-const MAIN_DIST = path.join(process.env.APP_ROOT, "dist-electron");
-const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
-process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
-let win;
-let oscServer = null;
-let oscClient = null;
-protocol.registerSchemesAsPrivileged([
-  { scheme: "media", privileges: { secure: true, supportFetchAPI: true, bypassCSP: true, stream: true } }
+const A = f.dirname(N(import.meta.url));
+process.env.APP_ROOT = f.join(A, "..");
+const b = process.env.VITE_DEV_SERVER_URL, ae = f.join(process.env.APP_ROOT, "dist-electron"), F = f.join(process.env.APP_ROOT, "dist");
+process.env.VITE_PUBLIC = b ? f.join(process.env.APP_ROOT, "public") : F;
+let c, l = null, u = null;
+k.registerSchemesAsPrivileged([
+  { scheme: "media", privileges: { secure: !0, supportFetchAPI: !0, bypassCSP: !0, stream: !0 } }
 ]);
-function createWindow() {
-  win = new BrowserWindow({
+function D() {
+  c = new R({
     width: 1200,
     height: 800,
     backgroundColor: "#020617",
     // slate-950
-    icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
+    icon: f.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
     webPreferences: {
-      preload: path.join(__dirname$1, "preload.mjs"),
-      nodeIntegration: false,
-      contextIsolation: true,
-      webSecurity: true
+      preload: f.join(A, "preload.mjs"),
+      nodeIntegration: !1,
+      contextIsolation: !0,
+      webSecurity: !0
     }
-  });
-  win.webContents.on("did-finish-load", () => {
-    win == null ? void 0 : win.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
-  });
-  if (VITE_DEV_SERVER_URL) {
-    win.loadURL(VITE_DEV_SERVER_URL);
-  } else {
-    win.loadFile(path.join(RENDERER_DIST, "index.html"));
-  }
+  }), c.webContents.on("did-finish-load", () => {
+    c == null || c.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
+  }), b ? c.loadURL(b) : c.loadFile(f.join(F, "index.html"));
 }
-ipcMain.handle("open-file-dialog", async () => {
-  if (!win) return null;
-  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+d.handle("open-file-dialog", async () => {
+  if (!c) return null;
+  const { canceled: t, filePaths: e } = await E.showOpenDialog(c, {
     properties: ["openFile"],
     filters: [
       { name: "Audio", extensions: ["mp3", "wav", "aac", "m4a", "aiff", "flac", "ogg"] }
     ]
   });
-  if (canceled || filePaths.length === 0) {
-    return null;
-  }
-  return filePaths[0];
+  return t || e.length === 0 ? null : e[0];
 });
-ipcMain.on("set-x32-ip", (_, ip) => {
-  if (oscClient) {
-    oscClient = null;
-  }
-  if (oscServer) {
-    oscServer.close();
-    oscServer = null;
-  }
-  try {
-    oscServer = new Server(0, "0.0.0.0", () => {
-      var _a, _b;
-      const port = (_b = (_a = oscServer == null ? void 0 : oscServer._sock) == null ? void 0 : _a.address()) == null ? void 0 : _b.port;
-      console.log(`OSC Server listening on 0.0.0.0:${port}`);
-    });
-    oscServer.on("message", (msg, rinfo) => {
-      console.log("Received OSC:", msg);
-      if (win) {
-        win.webContents.send("osc-message", msg, rinfo);
-      }
-    });
-    oscServer.on("error", (err) => {
-      console.error("OSC Server Error:", err);
-    });
-    oscClient = new Client(ip, 10023);
-    oscClient._sock.close();
-    oscClient._sock = oscServer._sock;
-    console.log(`OSC Client configured to send to ${ip}:10023 using Server's socket`);
-  } catch (err) {
-    console.error("Failed to create OSC connection:", err);
-  }
-});
-ipcMain.on("send-osc", (_, address, ...args) => {
-  if (oscClient) {
-    oscClient.send(address, ...args, (err) => {
-      if (err) console.error("OSC Send Error:", err);
-    });
-  } else {
-    console.warn("OSC Client not initialized. Call set-x32-ip first.");
-  }
-});
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-    win = null;
-  }
-  if (oscServer) {
-    oscServer.close();
-    oscServer = null;
-  }
-  oscClient = null;
-});
-app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
-});
-app.whenReady().then(() => {
-  protocol.handle("media", (request) => {
-    const url = request.url.slice("media://".length);
-    const decodedUrl = decodeURIComponent(url);
-    return net.fetch("file://" + decodedUrl);
+d.handle("show-save-dialog", async () => {
+  if (!c) return null;
+  const { canceled: t, filePath: e } = await E.showSaveDialog(c, {
+    title: "Save Show",
+    defaultPath: "MyShow.json",
+    filters: [
+      { name: "Maestro Show", extensions: ["json"] }
+    ]
   });
-  createWindow();
+  return t || !e ? null : e;
+});
+d.handle("save-file", async (t, e, n) => {
+  try {
+    return await (await import("node:fs/promises")).writeFile(e, n, "utf-8"), { success: !0 };
+  } catch (o) {
+    return console.error("Failed to save file:", o), { success: !1, error: String(o) };
+  }
+});
+d.handle("show-open-dialog", async () => {
+  if (!c) return null;
+  const { canceled: t, filePaths: e } = await E.showOpenDialog(c, {
+    title: "Open Show",
+    properties: ["openFile"],
+    filters: [
+      { name: "Maestro Show", extensions: ["json"] }
+    ]
+  });
+  if (t || e.length === 0)
+    return null;
+  const n = e[0];
+  try {
+    const s = await (await import("node:fs/promises")).readFile(n, "utf-8");
+    return { filePath: n, content: s };
+  } catch (o) {
+    return console.error("Failed to read file:", o), null;
+  }
+});
+d.on("set-x32-ip", (t, e) => {
+  u && (u = null), l && (l.close(), l = null);
+  try {
+    l = new Z(0, "0.0.0.0", () => {
+      var o, s;
+      const n = (s = (o = l == null ? void 0 : l._sock) == null ? void 0 : o.address()) == null ? void 0 : s.port;
+      console.log(`OSC Server listening on 0.0.0.0:${n}`);
+    }), l.on("message", (n, o) => {
+      console.log("Received OSC:", n), c && c.webContents.send("osc-message", n, o);
+    }), l.on("error", (n) => {
+      console.error("OSC Server Error:", n);
+    }), u = new ee(e, 10023), u._sock.close(), u._sock = l._sock, console.log(`OSC Client configured to send to ${e}:10023 using Server's socket`);
+  } catch (n) {
+    console.error("Failed to create OSC connection:", n);
+  }
+});
+d.on("send-osc", (t, e, ...n) => {
+  u ? u.send(e, ...n, (o) => {
+    o && console.error("OSC Send Error:", o);
+  }) : console.warn("OSC Client not initialized. Call set-x32-ip first.");
+});
+m.on("window-all-closed", () => {
+  process.platform !== "darwin" && (m.quit(), c = null), l && (l.close(), l = null), u = null;
+});
+m.on("activate", () => {
+  R.getAllWindows().length === 0 && D();
+});
+m.whenReady().then(() => {
+  k.handle("media", (t) => {
+    const e = t.url.slice(8), n = decodeURIComponent(e);
+    return x.fetch("file://" + n);
+  }), D();
 });
 export {
-  MAIN_DIST,
-  RENDERER_DIST,
-  VITE_DEV_SERVER_URL
+  ae as MAIN_DIST,
+  F as RENDERER_DIST,
+  b as VITE_DEV_SERVER_URL
 };

@@ -5,6 +5,9 @@ export interface IElectronAPI {
     invoke: (channel: string, ...args: any[]) => Promise<any>;
     setX32Ip: (ip: string) => void;
     sendOsc: (address: string, ...args: any[]) => void;
+    showSaveDialog: () => Promise<string | null>;
+    saveFile: (filePath: string, content: string) => Promise<{ success: boolean; error?: string }>;
+    showOpenDialog: () => Promise<{ filePath: string; content: string } | null>;
 }
 
 declare global {

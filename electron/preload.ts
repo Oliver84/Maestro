@@ -23,4 +23,9 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   setX32Ip: (ip: string) => ipcRenderer.send('set-x32-ip', ip),
   sendOsc: (address: string, ...args: any[]) => ipcRenderer.send('send-osc', address, ...args),
   selectAudioFile: () => ipcRenderer.invoke('open-file-dialog'),
+
+  // Show Persistence
+  showSaveDialog: () => ipcRenderer.invoke('show-save-dialog'),
+  saveFile: (filePath: string, content: string) => ipcRenderer.invoke('save-file', filePath, content),
+  showOpenDialog: () => ipcRenderer.invoke('show-open-dialog'),
 })

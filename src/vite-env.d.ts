@@ -9,5 +9,8 @@ interface Window {
     setX32Ip: (ip: string) => void;
     sendOsc: (address: string, ...args: any[]) => void;
     selectAudioFile: () => Promise<string | null>;
+    showSaveDialog: () => Promise<string | null>;
+    saveFile: (filePath: string, content: string) => Promise<{ success: boolean; error?: string }>;
+    showOpenDialog: () => Promise<{ filePath: string; content: string } | null>;
   }
 }

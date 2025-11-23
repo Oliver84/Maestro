@@ -9,6 +9,7 @@ import { KeyboardShortcuts } from './components/KeyboardShortcuts/KeyboardShortc
 import { PerformanceOverlay } from './components/PerformanceOverlay/PerformanceOverlay'
 import { ShowTimer } from './components/ShowTimer/ShowTimer'
 import { useAppStore } from './store/useAppStore'
+
 import { initializeMockChannels } from './utils/mockData'
 
 function App() {
@@ -154,6 +155,8 @@ function App() {
           <div className="h-8 w-px bg-slate-800" />
 
           <div className="flex items-center gap-3">
+
+
             <button
               onClick={handleConnectX32}
               className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-sm font-medium transition-colors flex items-center gap-2"

@@ -78,6 +78,57 @@ ipcMain.handle('open-file-dialog', async () => {
   return filePaths[0];
 });
 
+// Show Persistence IPC Handlers
+ipcMain.handle('show-save-dialog', async () => {
+  if (!win) return null;
+  const { canceled, filePath } = await dialog.showSaveDialog(win, {
+    title: 'Save Show',
+    defaultPath: 'MyShow.json',
+    filters: [
+      { name: 'Maestro Show', extensions: ['json'] }
+    ]
+  });
+  if (canceled || !filePath) {
+    return null;
+  }
+  return filePath;
+});
+
+ipcMain.handle('save-file', async (_, filePath: string, content: string) => {
+  try {
+    const fs = await import('node:fs/promises');
+    await fs.writeFile(filePath, content, 'utf-8');
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to save file:', error);
+    return { success: false, error: String(error) };
+  }
+});
+
+ipcMain.handle('show-open-dialog', async () => {
+  if (!win) return null;
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    title: 'Open Show',
+    properties: ['openFile'],
+    filters: [
+      { name: 'Maestro Show', extensions: ['json'] }
+    ]
+  });
+  if (canceled || filePaths.length === 0) {
+    return null;
+  }
+
+  const filePath = filePaths[0];
+  try {
+    const fs = await import('node:fs/promises');
+    const content = await fs.readFile(filePath, 'utf-8');
+    return { filePath, content };
+  } catch (error) {
+    console.error('Failed to read file:', error);
+    return null;
+  }
+});
+
 // OSC IPC Handlers
 ipcMain.on('set-x32-ip', (_, ip: string) => {
   // Clean up existing connections
@@ -101,14 +152,14 @@ ipcMain.on('set-x32-ip', (_, ip: string) => {
     });
 
     // 2. Handle Incoming Messages
-    oscServer.on('message', (msg, rinfo) => {
+    (oscServer as any).on('message', (msg: any, rinfo: any) => {
       console.log('Received OSC:', msg);
       if (win) {
         win.webContents.send('osc-message', msg, rinfo);
       }
     });
 
-    oscServer.on('error', (err) => {
+    (oscServer as any).on('error', (err: any) => {
       console.error('OSC Server Error:', err);
     });
 
