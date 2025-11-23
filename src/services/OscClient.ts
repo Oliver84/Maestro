@@ -9,6 +9,7 @@ export class BrowserOscClient {
     private port: number;
     private isConnected: boolean = false;
     private simulationMode: boolean = false;
+    private debugMode: boolean = false;
     private logCallback: ((msg: string) => void) | null = null;
     private heartbeatInterval: any = null;
     private meterInterval: any = null;
@@ -28,6 +29,10 @@ export class BrowserOscClient {
     setSimulationMode(enabled: boolean) {
         this.simulationMode = enabled;
         console.log(`[OSC Client] Simulation mode set to: ${enabled}`);
+    }
+
+    setDebugMode(enabled: boolean) {
+        this.debugMode = enabled;
     }
 
     setLogCallback(callback: (msg: string) => void) {
@@ -117,7 +122,8 @@ export class BrowserOscClient {
         const [address, ...args] = msg;
 
         // Log reception (skip meters to avoid spam)
-        if (this.logCallback && address !== '/meters/1') {
+        // Only log if debug mode is enabled
+        if (this.debugMode && this.logCallback && address !== '/meters/1') {
             this.logCallback(`[IN] ${address} ${args.join(' ')}`);
         }
 
@@ -189,10 +195,13 @@ export class BrowserOscClient {
         // Skip logging for meters to avoid spam
         if (address !== '/meters') {
             const message = `${address} ${args.map(a => typeof a === 'number' ? a.toFixed(2) : a).join(' ')}`;
-            console.log(`[OSC Client] Sent: ${message}`);
 
-            if (this.logCallback) {
-                this.logCallback(`[OUT] ${message}`);
+            // Only log if debug is enabled
+            if (this.debugMode) {
+                console.log(`[OSC Client] Sent: ${message}`);
+                if (this.logCallback) {
+                    this.logCallback(`[OUT] ${message}`);
+                }
             }
         }
     }

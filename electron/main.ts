@@ -101,14 +101,17 @@ ipcMain.on('set-x32-ip', (_, ip: string) => {
     });
 
     // 2. Handle Incoming Messages
-    oscServer.on('message', (msg, rinfo) => {
-      console.log('Received OSC:', msg);
+    // @ts-expect-error - node-osc types might be incomplete
+    oscServer.on('message', (msg: any, rinfo: any) => {
+      // High frequency logging removed for performance
+      // console.log('Received OSC:', msg);
       if (win) {
         win.webContents.send('osc-message', msg, rinfo);
       }
     });
 
-    oscServer.on('error', (err) => {
+    // @ts-expect-error - node-osc types might be incomplete
+    oscServer.on('error', (err: any) => {
       console.error('OSC Server Error:', err);
     });
 

@@ -16,6 +16,13 @@ function App() {
   const [isPerformanceOpen, setIsPerformanceOpen] = useState(false)
   const { settings, selectNextCue, selectPreviousCue, fireCue, selectedCueId, toasts, dismissToast, addToast } = useAppStore()
 
+  // Initialize Audio Engine on mount (warmup)
+  useEffect(() => {
+    import('./services/AudioEngine').then(({ AudioEngine }) => {
+      AudioEngine.init();
+    });
+  }, []);
+
   // Initialize mock channels (but NOT cues) for simulation mode
   useEffect(() => {
     if (settings.simulationMode) {
@@ -32,12 +39,14 @@ function App() {
     });
   }, []);
 
-  // Sync simulation mode with OscClient
+  // Sync simulation and debug mode with OscClient
   useEffect(() => {
     import('./services/OscClient').then(({ getOscClient }) => {
-      getOscClient().setSimulationMode(settings.simulationMode);
+      const client = getOscClient();
+      client.setSimulationMode(settings.simulationMode);
+      client.setDebugMode(!!settings.debug);
     });
-  }, [settings.simulationMode]);
+  }, [settings.simulationMode, settings.debug]);
 
   // Sync settings with Electron Main process
   useEffect(() => {

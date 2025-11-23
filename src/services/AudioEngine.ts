@@ -45,20 +45,46 @@ export class AudioEngineService {
     private readonly MAX_CACHE_SIZE = 50; // Maximum cached items
 
     constructor() {
+        // Defer analyser setup until explicit init to avoid warnings
+    }
+
+    /**
+     * Initialize Audio Context and Analyser
+     * Call this on app start or first user interaction to "warm up" the engine
+     */
+    init() {
+        if (!Howler.ctx) {
+            console.warn('[Audio Engine] Howler context not available yet.');
+            return;
+        }
+
+        if (Howler.ctx.state === 'suspended') {
+            Howler.ctx.resume().then(() => {
+                console.log('[Audio Engine] AudioContext resumed during init');
+            });
+        }
+
         this.setupAnalyser();
+        console.log('[Audio Engine] Initialized');
     }
 
     private setupAnalyser() {
-        if (Howler.ctx) {
-            this.analyser = Howler.ctx.createAnalyser();
-            this.analyser.fftSize = 2048;
-            // Connect Howler's master gain to the analyser
-            Howler.masterGain.connect(this.analyser);
-            // Connect analyser to destination so we can hear it
-            this.analyser.connect(Howler.ctx.destination);
+        if (this.analyser) return; // Already setup
 
-            this.bufferLength = this.analyser.frequencyBinCount;
-            this.dataArray = new Uint8Array(this.bufferLength);
+        if (Howler.ctx) {
+            try {
+                this.analyser = Howler.ctx.createAnalyser();
+                this.analyser.fftSize = 2048;
+                // Connect Howler's master gain to the analyser
+                Howler.masterGain.connect(this.analyser);
+                // Connect analyser to destination so we can hear it
+                this.analyser.connect(Howler.ctx.destination);
+
+                this.bufferLength = this.analyser.frequencyBinCount;
+                this.dataArray = new Uint8Array(this.bufferLength);
+            } catch (err) {
+                console.error('[Audio Engine] Failed to setup analyser:', err);
+            }
         } else {
             console.warn('[Audio Engine] Web Audio API not available in Howler context yet.');
         }

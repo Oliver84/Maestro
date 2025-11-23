@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAppStore } from '../../store/useAppStore';
-import { Square, Pause, Play } from 'lucide-react';
+import { Pause, Play } from 'lucide-react';
 
 export const TransportControls: React.FC = () => {
     const { panic, isPaused, stopAll, resetShowTimer } = useAppStore();

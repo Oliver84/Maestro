@@ -41,6 +41,7 @@ export interface AppSettings {
     simulationMode: boolean;
     showImage?: string;
     showToasts?: boolean;
+    debug?: boolean;
 }
 
 interface AppState {
@@ -62,6 +63,7 @@ interface AppState {
     setSimulationMode: (enabled: boolean) => void;
     setShowImage: (image: string) => void;
     setShowToasts: (enabled: boolean) => void;
+    setDebug: (enabled: boolean) => void;
     setX32Channels: (channels: X32Channel[]) => void;
     initializeEmptyChannels: () => void;
     setSelectedChannels: (channelNumbers: number[]) => void;
@@ -110,6 +112,7 @@ export const useAppStore = create<AppState>()(
                 audioDeviceId: 'default',
                 simulationMode: true, // Default to simulation mode
                 showToasts: true, // Default to showing toasts
+                debug: false,
             },
             x32Channels: [],
             channelMeters: {},
@@ -135,6 +138,7 @@ export const useAppStore = create<AppState>()(
             },
             setShowImage: (image: string) => set((state) => ({ settings: { ...state.settings, showImage: image } })),
             setShowToasts: (enabled) => set((state) => ({ settings: { ...state.settings, showToasts: enabled } })),
+            setDebug: (enabled) => set((state) => ({ settings: { ...state.settings, debug: enabled } })),
 
             setX32Channels: (channels) => set({ x32Channels: channels }),
             setSelectedChannels: (channelNumbers) => set({ selectedChannelIds: channelNumbers }),
