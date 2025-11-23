@@ -15,6 +15,16 @@ export interface ActiveSound {
     startTime: number; // When this sound started playing
 }
 
+export interface CachedBuffer {
+    buffer: AudioBuffer;
+    timestamp: number;
+}
+
+export interface CachedWaveform {
+    points: number[];
+    timestamp: number;
+}
+
 export class AudioEngineService {
     // Track active sounds with metadata
     private activeSounds: Map<string, ActiveSound> = new Map();
@@ -26,6 +36,13 @@ export class AudioEngineService {
     public analyser: AnalyserNode | null = null;
     private bufferLength: number = 0;
     private dataArray: Uint8Array | null = null;
+
+    // Pre-buffering and caching
+    private bufferCache: Map<string, CachedBuffer> = new Map();
+    private waveformCache: Map<string, CachedWaveform> = new Map();
+    private preloadedHowls: Map<string, Howl> = new Map();
+    private readonly CACHE_MAX_AGE = 30 * 60 * 1000; // 30 minutes
+    private readonly MAX_CACHE_SIZE = 50; // Maximum cached items
 
     constructor() {
         this.setupAnalyser();
@@ -183,6 +200,20 @@ export class AudioEngineService {
         this.primaryCueId = null;
     }
 
+    pauseAll() {
+        console.log('[Audio Engine] Pausing all playback');
+        this.activeSounds.forEach(activeSound => {
+            activeSound.howl.pause();
+        });
+    }
+
+    resumeAll() {
+        console.log('[Audio Engine] Resuming all playback');
+        this.activeSounds.forEach(activeSound => {
+            activeSound.howl.play();
+        });
+    }
+
     isPlaying(): boolean {
         // Return true if ANY sound is playing
         return this.activeSounds.size > 0;
@@ -274,6 +305,179 @@ export class AudioEngineService {
 
     getAudioContext(): AudioContext | null {
         return Howler.ctx || null;
+    }
+
+    // Pre-buffering and Caching Methods
+
+    /**
+     * Preload an audio file into memory without playing it
+     * This eliminates latency when the cue is fired
+     */
+    async preloadAudio(filePath: string): Promise<void> {
+        const src = AudioEngineService.resolvePath(filePath);
+
+        // Check if already preloaded
+        if (this.preloadedHowls.has(src)) {
+            console.log(`[Audio Engine] Already preloaded: ${src}`);
+            return;
+        }
+
+        console.log(`[Audio Engine] Preloading: ${src}`);
+
+        return new Promise((resolve, reject) => {
+            const howl = new Howl({
+                src: [src],
+                html5: false,
+                format: ['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a'],
+                preload: true,
+                onload: () => {
+                    this.preloadedHowls.set(src, howl);
+                    console.log(`[Audio Engine] Preloaded successfully: ${src}`);
+
+                    // Also cache the buffer
+                    const buffer = this.getBufferForHowl(howl);
+                    if (buffer) {
+                        this.bufferCache.set(src, {
+                            buffer,
+                            timestamp: Date.now()
+                        });
+                    }
+
+                    resolve();
+                },
+                onloaderror: (_id, error) => {
+                    console.error(`[Audio Engine] Preload error: ${src}`, error);
+                    reject(error);
+                }
+            });
+        });
+    }
+
+    /**
+     * Get a preloaded Howl instance (for instant playback)
+     */
+    getPreloadedHowl(filePath: string): Howl | null {
+        const src = AudioEngineService.resolvePath(filePath);
+        return this.preloadedHowls.get(src) || null;
+    }
+
+    /**
+     * Cache waveform data to avoid regeneration
+     */
+    cacheWaveform(filePath: string, points: number[]): void {
+        const src = AudioEngineService.resolvePath(filePath);
+        this.waveformCache.set(src, {
+            points,
+            timestamp: Date.now()
+        });
+        this.cleanupCache();
+    }
+
+    /**
+     * Get cached waveform data
+     */
+    getCachedWaveform(filePath: string): number[] | null {
+        const src = AudioEngineService.resolvePath(filePath);
+        const cached = this.waveformCache.get(src);
+
+        if (!cached) return null;
+
+        // Check if cache is still valid
+        if (Date.now() - cached.timestamp > this.CACHE_MAX_AGE) {
+            this.waveformCache.delete(src);
+            return null;
+        }
+
+        return cached.points;
+    }
+
+    /**
+     * Get cached audio buffer
+     */
+    getCachedBuffer(filePath: string): AudioBuffer | null {
+        const src = AudioEngineService.resolvePath(filePath);
+        const cached = this.bufferCache.get(src);
+
+        if (!cached) return null;
+
+        // Check if cache is still valid
+        if (Date.now() - cached.timestamp > this.CACHE_MAX_AGE) {
+            this.bufferCache.delete(src);
+            return null;
+        }
+
+        return cached.buffer;
+    }
+
+    /**
+     * Clean up old cache entries
+     */
+    private cleanupCache(): void {
+        const now = Date.now();
+
+        // Clean waveform cache
+        if (this.waveformCache.size > this.MAX_CACHE_SIZE) {
+            const entries = Array.from(this.waveformCache.entries());
+            entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+
+            // Remove oldest 20%
+            const toRemove = Math.floor(entries.length * 0.2);
+            for (let i = 0; i < toRemove; i++) {
+                this.waveformCache.delete(entries[i][0]);
+            }
+        }
+
+        // Clean buffer cache
+        if (this.bufferCache.size > this.MAX_CACHE_SIZE) {
+            const entries = Array.from(this.bufferCache.entries());
+            entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+
+            const toRemove = Math.floor(entries.length * 0.2);
+            for (let i = 0; i < toRemove; i++) {
+                this.bufferCache.delete(entries[i][0]);
+            }
+        }
+
+        // Remove expired entries
+        for (const [key, value] of this.waveformCache.entries()) {
+            if (now - value.timestamp > this.CACHE_MAX_AGE) {
+                this.waveformCache.delete(key);
+            }
+        }
+
+        for (const [key, value] of this.bufferCache.entries()) {
+            if (now - value.timestamp > this.CACHE_MAX_AGE) {
+                this.bufferCache.delete(key);
+            }
+        }
+    }
+
+    /**
+     * Clear all caches
+     */
+    clearCaches(): void {
+        // Unload preloaded howls
+        for (const howl of this.preloadedHowls.values()) {
+            howl.unload();
+        }
+
+        this.preloadedHowls.clear();
+        this.bufferCache.clear();
+        this.waveformCache.clear();
+
+        console.log('[Audio Engine] All caches cleared');
+    }
+
+    /**
+     * Get cache statistics
+     */
+    getCacheStats() {
+        return {
+            preloadedAudio: this.preloadedHowls.size,
+            cachedBuffers: this.bufferCache.size,
+            cachedWaveforms: this.waveformCache.size,
+            activeSounds: this.activeSounds.size
+        };
     }
 
     static resolvePath(filePath: string): string {

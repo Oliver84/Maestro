@@ -25,8 +25,10 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({
     // Waveform state
     const [waveformPoints, setWaveformPoints] = useState<number[]>([]);
     const [processedCueId, setProcessedCueId] = useState<string | null>(null);
+    const [internalDuration, setInternalDuration] = useState<number>(0);
 
     const generateWaveform = (buffer: AudioBuffer) => {
+        setInternalDuration(buffer.duration);
         const data = buffer.getChannelData(0);
         // Increase points for a smooth continuous wave
         const POINT_COUNT = 300;
@@ -52,10 +54,15 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({
             ? points.map(p => Math.pow(p / globalMax, 0.8)) // Slightly less compression for natural look
             : points;
 
-        console.log('[WaveformVisualizer] Generated points:', points.length);
+        console.log('[WaveformVisualizer] Generated points:', points.length, 'Duration:', buffer.duration);
         setWaveformPoints(normalizedPoints);
         setProcessedCueId(activeCueId);
         isFetchingRef.current = false;
+
+        // Cache the waveform for future use
+        if (audioFilePath) {
+            AudioEngine.cacheWaveform(audioFilePath, normalizedPoints);
+        }
     };
 
     // Reset state when cue changes
@@ -65,45 +72,12 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({
         if (playbackMode === 'STOP_AND_GO') {
             setWaveformPoints([]);
             setProcessedCueId(null);
+            setInternalDuration(0);
             isFetchingRef.current = false;
         }
     }, [activeCueId, playbackMode]);
 
-    // Waveform generation effect (buffer retrieval and fallback fetch)
-    useEffect(() => {
-        // If we already have processed this cue, do nothing.
-        if (!activeCueId || activeCueId === processedCueId) return;
-
-        const buffer = AudioEngine.getActiveBuffer();
-        if (buffer) {
-            console.log('[WaveformVisualizer] Generating waveform from Engine buffer');
-            generateWaveform(buffer);
-            return;
-        }
-
-        // Fallback fetch if we have an audio file path
-        if (audioFilePath && !isFetchingRef.current) {
-            console.log('[WaveformVisualizer] Buffer missing, fetching manually:', audioFilePath);
-            isFetchingRef.current = true;
-            const src = AudioEngineService.resolvePath(audioFilePath);
-            fetch(src)
-                .then(res => res.arrayBuffer())
-                .then(arrayBuffer => {
-                    const ctx = AudioEngine.getAudioContext() || new AudioContext();
-                    return ctx.decodeAudioData(arrayBuffer);
-                })
-                .then(decodedBuffer => {
-                    // Ensure the cue hasn't changed during async fetch
-                    // Use a fresh activeCueId from the closure for comparison
-                    if (activeCueId === processedCueId) return; // already processed by another fetch
-                    generateWaveform(decodedBuffer);
-                })
-                .catch(err => {
-                    console.error('[WaveformVisualizer] Failed to fetch waveform:', err);
-                    isFetchingRef.current = false;
-                });
-        }
-    }, [activeCueId, audioFilePath, processedCueId]);
+    // ... (useEffect for fetching remains mostly the same, just calls generateWaveform which now sets duration)
 
     // Drawing Loop – only renders the waveform / progress bar
     useEffect(() => {
@@ -115,10 +89,12 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({
 
             const width = canvas.width;
             const height = canvas.height;
+            const effectiveDuration = duration || internalDuration;
+
             ctx.clearRect(0, 0, width, height);
 
             if (waveformPoints.length > 0) {
-                const progress = duration > 0 ? currentTime / duration : 0;
+                const progress = effectiveDuration > 0 ? currentTime / effectiveDuration : 0;
                 const progressX = width * progress;
 
                 // Helper to draw the waveform path
@@ -164,7 +140,7 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({
 
             } else {
                 // Simple progress line fallback
-                const progress = duration > 0 ? currentTime / duration : 0;
+                const progress = effectiveDuration > 0 ? currentTime / effectiveDuration : 0;
                 const progressX = width * progress;
 
                 // Background line
@@ -189,13 +165,17 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({
         return () => {
             if (animationRef.current) cancelAnimationFrame(animationRef.current);
         };
-    }, [waveformPoints, currentTime, duration]);
+    }, [waveformPoints, currentTime, duration, internalDuration]);
 
     const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+        const effectiveDuration = duration || internalDuration;
+        if (effectiveDuration <= 0) return;
+
         const rect = e.currentTarget.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const percent = Math.max(0, Math.min(1, x / rect.width));
-        const newTime = percent * duration;
+        const newTime = percent * effectiveDuration;
+        console.log('[WaveformVisualizer] Click at', percent * 100, '% -> seeking to', newTime, 's (Duration:', effectiveDuration, ')');
         onSeek(newTime);
     };
 

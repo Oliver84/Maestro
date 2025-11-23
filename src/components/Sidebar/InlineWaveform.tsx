@@ -213,13 +213,30 @@ export const InlineWaveform: React.FC<InlineWaveformProps> = ({
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
+    const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (duration <= 0) return;
+
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const percent = Math.max(0, Math.min(1, x / rect.width));
+        const newTime = percent * duration;
+
+        console.log(`[InlineWaveform] Seeking cue ${cueId} to ${newTime}s`);
+        AudioEngine.seekCue(cueId, newTime);
+    };
+
     return (
         <div className="w-full">
-            <div className="w-full h-16 relative">
+            <div
+                className="w-full h-16 relative cursor-pointer group"
+                onClick={handleSeek}
+            >
                 <canvas
                     ref={canvasRef}
                     className="w-full h-full"
                 />
+                {/* Hover effect overlay */}
+                <div className="absolute inset-0 bg-white/0 group-hover:bg-white/5 transition-colors rounded" />
             </div>
             {/* Time display */}
             <div className="flex justify-between items-center mt-1.5 text-[10px] font-mono">

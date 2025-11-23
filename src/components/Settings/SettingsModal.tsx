@@ -11,7 +11,7 @@ interface SettingsModalProps {
 type TabType = 'general' | 'channels';
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
-    const { settings, setX32Ip, setAudioDevice, setSimulationMode, setShowImage } = useAppStore();
+    const { settings, setX32Ip, setAudioDevice, setSimulationMode, setShowImage, setShowToasts } = useAppStore();
     const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
     const [activeTab, setActiveTab] = useState<TabType>('general');
 
@@ -59,7 +59,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                 </div>
 
                 {/* Tab Content */}
-                <div className="flex-1 overflow-hidden">
+                <div className="flex-1 overflow-y-auto">
                     {activeTab === 'general' && (
                         <div className="p-6 space-y-6">
                             {/* Simulation Mode Toggle */}
@@ -77,6 +77,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                                 >
                                     <div
                                         className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${settings.simulationMode ? 'translate-x-6' : 'translate-x-0'
+                                            }`}
+                                    />
+                                </button>
+                            </div>
+
+                            {/* Show Toasts Toggle */}
+                            <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                                <div>
+                                    <div className="text-sm font-medium text-slate-200">Show Toast Notifications</div>
+                                    <div className="text-xs text-slate-400 mt-1">
+                                        Enable or disable popup notifications
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setShowToasts(settings.showToasts === false)}
+                                    className={`relative w-12 h-6 rounded-full transition-colors ${settings.showToasts !== false ? 'bg-emerald-500' : 'bg-slate-600'
+                                        }`}
+                                >
+                                    <div
+                                        className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${settings.showToasts !== false ? 'translate-x-6' : 'translate-x-0'
                                             }`}
                                     />
                                 </button>

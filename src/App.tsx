@@ -1,15 +1,20 @@
 import { useState, useEffect } from 'react'
-import { Settings, Wifi } from 'lucide-react'
+import { Settings, Wifi, Activity } from 'lucide-react'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import { Dashboard } from './components/Dashboard/Dashboard'
 import { Sidebar } from './components/Sidebar/Sidebar'
 import { SettingsModal } from './components/Settings/SettingsModal'
+import { ToastContainer } from './components/Toast/Toast'
+import { KeyboardShortcuts } from './components/KeyboardShortcuts/KeyboardShortcuts'
+import { PerformanceOverlay } from './components/PerformanceOverlay/PerformanceOverlay'
+import { ShowTimer } from './components/ShowTimer/ShowTimer'
 import { useAppStore } from './store/useAppStore'
 import { initializeMockChannels } from './utils/mockData'
 
 function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const { settings, selectNextCue, selectPreviousCue, fireCue, selectedCueId } = useAppStore()
+  const [isPerformanceOpen, setIsPerformanceOpen] = useState(false)
+  const { settings, selectNextCue, selectPreviousCue, fireCue, selectedCueId, toasts, dismissToast, addToast } = useAppStore()
 
   // Initialize mock channels (but NOT cues) for simulation mode
   useEffect(() => {
@@ -58,32 +63,64 @@ function App() {
         case 'ArrowDown':
           e.preventDefault();
           selectNextCue();
+          addToast('Next cue selected', 'action', 1500);
           break;
         case 'ArrowUp':
           e.preventDefault();
           selectPreviousCue();
+          addToast('Previous cue selected', 'action', 1500);
           break;
         case ' ':
+        case 'Enter':
           e.preventDefault();
+          const state = useAppStore.getState();
+
+          // If paused, resume
+          if (state.isPaused) {
+            state.resume();
+            addToast('Resumed', 'action', 1500);
+            return;
+          }
+
           // Fire selected, or fallback to next available logic
           if (selectedCueId) {
+            const cue = state.cues.find(c => c.id === selectedCueId);
             fireCue(selectedCueId);
+            addToast(`GO: ${cue?.title || 'Cue fired'}`, 'success', 2000);
           } else {
             // Auto-select first logic handled in store usually, but just in case
-            const state = useAppStore.getState();
-            if (state.cues.length > 0) fireCue(state.cues[0].id);
+            if (state.cues.length > 0) {
+              fireCue(state.cues[0].id);
+              addToast(`GO: ${state.cues[0].title}`, 'success', 2000);
+            }
           }
           break;
         case 'Escape':
           e.preventDefault();
-          useAppStore.getState().stopAll();
+          if (e.shiftKey) {
+            // Shift + ESC = Hard Stop
+            useAppStore.getState().stopAll();
+            useAppStore.getState().resetShowTimer();
+            addToast('HARD STOP - All audio stopped', 'error', 2000);
+          } else {
+            // ESC = Toggle Pause/Resume
+            useAppStore.getState().panic();
+
+            // Check new state to show appropriate message
+            const newState = useAppStore.getState();
+            if (newState.isPaused) {
+              addToast('PAUSED - Press ESC to Resume, Shift+ESC to Stop', 'info', 2000);
+            } else {
+              addToast('RESUMED', 'success', 1500);
+            }
+          }
           break;
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectNextCue, selectPreviousCue, fireCue, selectedCueId]);
+  }, [selectNextCue, selectPreviousCue, fireCue, selectedCueId, addToast]);
 
   const handleConnectX32 = () => {
     import('./services/OscClient').then(({ getOscClient }) => {
@@ -107,6 +144,7 @@ function App() {
         <div className="flex items-center gap-6">
           {/* Status Indicators */}
           <div className="flex items-center gap-4 text-xs font-bold tracking-wider">
+            <ShowTimer />
             <div className="flex items-center gap-2 text-slate-400 bg-slate-800/50 px-3 py-1.5 rounded border border-slate-700">
               <div className={`w-2 h-2 rounded-full ${settings.simulationMode ? 'bg-amber-500' : 'bg-emerald-500'}`} />
               {settings.simulationMode ? 'SIMULATION MODE' : 'X32 READY'}
@@ -122,6 +160,14 @@ function App() {
             >
               <Wifi size={16} />
               Connect X32
+            </button>
+            <button
+              onClick={() => setIsPerformanceOpen(!isPerformanceOpen)}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-sm font-medium transition-colors flex items-center gap-2"
+              title="Toggle Performance Overlay (Cmd+Shift+M)"
+            >
+              <Activity size={16} />
+              Perf
             </button>
             <button
               onClick={() => setIsSettingsOpen(true)}
@@ -167,6 +213,14 @@ function App() {
 
       {/* Modals */}
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+
+      {/* Global Overlays */}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      <KeyboardShortcuts />
+      <PerformanceOverlay
+        isVisible={isPerformanceOpen}
+        onToggle={setIsPerformanceOpen}
+      />
     </div>
   )
 }

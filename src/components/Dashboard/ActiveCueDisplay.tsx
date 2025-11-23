@@ -27,7 +27,7 @@ export const ActiveCueDisplay: React.FC = () => {
 
             <div className="flex-1 flex flex-col items-center justify-center w-full z-10">
                 {activeCue ? (
-                    <div className="flex flex-col items-center animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    <div className="flex flex-col items-center animate-in fade-in slide-in-from-bottom-4 duration-300 w-full px-6">
                         <div className="flex items-baseline gap-3 mb-2">
                             <span className="text-4xl font-black text-amber-500 tracking-tighter opacity-80">CUE</span>
                             <span className="text-8xl font-black text-amber-400 tracking-tighter leading-none">{activeCue.sequence}</span>
@@ -38,13 +38,15 @@ export const ActiveCueDisplay: React.FC = () => {
                         </h1>
 
                         {/* Scene Name */}
-                        <div className="h-8 flex items-center">
+                        <div className="h-8 flex items-center mb-4">
                             {activeCue.scene && (
                                 <div className="text-emerald-400 font-bold tracking-widest uppercase text-xs bg-emerald-950/30 px-3 py-1 rounded-full border border-emerald-500/20">
                                     {activeCue.scene}
                                 </div>
                             )}
                         </div>
+
+
                     </div>
                 ) : (
                     <div className="opacity-20 flex flex-col items-center justify-center h-full">

@@ -7,6 +7,13 @@ export interface LogEntry {
     message: string;
 }
 
+export interface ToastMessage {
+    id: string;
+    message: string;
+    type: 'success' | 'error' | 'info' | 'action';
+    duration?: number;
+}
+
 export interface Cue {
     id: string;
     sequence: number;
@@ -33,6 +40,7 @@ export interface AppSettings {
     audioDeviceId: string;
     simulationMode: boolean;
     showImage?: string;
+    showToasts?: boolean;
 }
 
 interface AppState {
@@ -40,6 +48,10 @@ interface AppState {
     activeCueId: string | null;
     selectedCueId: string | null;
     lastFiredAt: number;
+    showStartTime: number | null; // When the first cue was fired
+    showPausedTime: number; // Total time paused (accumulated)
+    showPausedAt: number | null; // When pause started (null if not paused)
+    isPaused: boolean; // Global pause state
     settings: AppSettings;
     x32Channels: X32Channel[];
     channelMeters: Record<number, number>;
@@ -49,6 +61,7 @@ interface AppState {
     setX32Ip: (ip: string) => void;
     setSimulationMode: (enabled: boolean) => void;
     setShowImage: (image: string) => void;
+    setShowToasts: (enabled: boolean) => void;
     setX32Channels: (channels: X32Channel[]) => void;
     setSelectedChannels: (channelNumbers: number[]) => void;
     updateChannelFader: (channelNumber: number, level: number) => void;
@@ -67,10 +80,17 @@ interface AppState {
 
     fireCue: (id: string) => void;
     stopAll: () => void;
+    panic: () => void; // Toggle Pause/Stop
+    resume: () => void; // Resume from pause
+    resetShowTimer: () => void;
 
     logs: LogEntry[];
     addLog: (message: string) => void;
     clearLogs: () => void;
+
+    toasts: ToastMessage[];
+    addToast: (message: string, type?: 'success' | 'error' | 'info' | 'action', duration?: number) => void;
+    dismissToast: (id: string) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -80,10 +100,15 @@ export const useAppStore = create<AppState>()(
             activeCueId: null,
             selectedCueId: null, // Initialize selection
             lastFiredAt: 0,
+            showStartTime: null, // Initialize show timer
+            showPausedTime: 0, // No time paused initially
+            showPausedAt: null, // Not paused initially
+            isPaused: false,
             settings: {
                 x32Ip: '192.168.1.50',
                 audioDeviceId: 'default',
                 simulationMode: true, // Default to simulation mode
+                showToasts: true, // Default to showing toasts
             },
             x32Channels: [],
             channelMeters: {},
@@ -108,6 +133,7 @@ export const useAppStore = create<AppState>()(
                 });
             },
             setShowImage: (image: string) => set((state) => ({ settings: { ...state.settings, showImage: image } })),
+            setShowToasts: (enabled) => set((state) => ({ settings: { ...state.settings, showToasts: enabled } })),
 
             setX32Channels: (channels) => set({ x32Channels: channels }),
             setSelectedChannels: (channelNumbers) => set({ selectedChannelIds: channelNumbers }),
@@ -196,17 +222,47 @@ export const useAppStore = create<AppState>()(
                 return { cues: newCues.map((c, i) => ({ ...c, sequence: i + 1 })) };
             }),
 
-            selectCue: (id) => set({ selectedCueId: id }),
+            selectCue: (id) => {
+                set({ selectedCueId: id });
+
+                // Pre-buffer the selected cue's audio
+                const state = get();
+                const cue = state.cues.find(c => c.id === id);
+                if (cue?.audioFilePath) {
+                    import('../services/AudioEngine').then(({ AudioEngine }) => {
+                        AudioEngine.preloadAudio(cue.audioFilePath).catch(err => {
+                            console.error('[Store] Failed to preload audio:', err);
+                        });
+                    });
+                }
+            },
 
             selectNextCue: () => {
                 const { cues, selectedCueId } = get();
                 if (!selectedCueId && cues.length > 0) {
                     set({ selectedCueId: cues[0].id });
+                    // Pre-buffer first cue
+                    if (cues[0].audioFilePath) {
+                        import('../services/AudioEngine').then(({ AudioEngine }) => {
+                            AudioEngine.preloadAudio(cues[0].audioFilePath).catch(err => {
+                                console.error('[Store] Failed to preload audio:', err);
+                            });
+                        });
+                    }
                     return;
                 }
                 const currentIndex = cues.findIndex(c => c.id === selectedCueId);
                 if (currentIndex !== -1 && currentIndex < cues.length - 1) {
-                    set({ selectedCueId: cues[currentIndex + 1].id });
+                    const nextCue = cues[currentIndex + 1];
+                    set({ selectedCueId: nextCue.id });
+                    // Pre-buffer next cue
+                    if (nextCue.audioFilePath) {
+                        import('../services/AudioEngine').then(({ AudioEngine }) => {
+                            AudioEngine.preloadAudio(nextCue.audioFilePath).catch(err => {
+                                console.error('[Store] Failed to preload audio:', err);
+                            });
+                        });
+                    }
                 }
             },
 
@@ -231,7 +287,34 @@ export const useAppStore = create<AppState>()(
                     return;
                 }
 
-                set({ activeCueId: id, selectedCueId: id, lastFiredAt: Date.now() });
+                const now = Date.now();
+
+                // Set show start time if this is the first cue fired
+                let showStartTime = state.showStartTime;
+                let showPausedTime = state.showPausedTime;
+
+                if (!showStartTime) {
+                    // New show start - reset everything
+                    showStartTime = now;
+                    showPausedTime = 0;
+                } else {
+                    // Resuming existing show
+                    // If resuming from pause, accumulate the paused time
+                    if (state.showPausedAt !== null) {
+                        const pauseDuration = now - state.showPausedAt;
+                        showPausedTime += pauseDuration;
+                    }
+                }
+
+                set({
+                    activeCueId: id,
+                    selectedCueId: id,
+                    lastFiredAt: now,
+                    showStartTime,
+                    showPausedTime,
+                    showPausedAt: null, // Resume (not paused)
+                    isPaused: false
+                });
                 console.log(`[Store] Firing cue: ${cue.title}`);
 
                 // Advance selection to next cue (Auto-step)
@@ -315,14 +398,60 @@ export const useAppStore = create<AppState>()(
             },
 
             stopAll: () => {
-                console.log('[Store] Stopping all playback');
-                // We intentionally DO NOT reset activeCueId here so the user knows where they are.
-                // set({ activeCueId: null });
+                console.log('[Store] Stopping all playback and pausing show timer');
+
+                // Pause show timer (don't reset)
+                set({ showPausedAt: Date.now(), isPaused: false }); // Reset isPaused because we are fully stopped
 
                 // Stop audio playback
                 import('../services/AudioEngine').then(({ AudioEngine }) => {
                     AudioEngine.stopAll();
                 });
+            },
+
+            panic: () => {
+                const state = get();
+                if (state.isPaused) {
+                    // If paused, RESUME
+                    console.log('[Store] Panic: Resuming');
+                    state.resume();
+                } else {
+                    // If playing (or stopped), PAUSE
+                    // Only pause if we are actually playing something? 
+                    // For now, just toggle state to be safe.
+                    console.log('[Store] Panic: Pausing');
+                    set({ isPaused: true, showPausedAt: Date.now() });
+                    import('../services/AudioEngine').then(({ AudioEngine }) => {
+                        AudioEngine.pauseAll();
+                    });
+                }
+            },
+
+            resume: () => {
+                const state = get();
+                if (state.isPaused) {
+                    console.log('[Store] Resuming');
+                    const now = Date.now();
+                    let showPausedTime = state.showPausedTime;
+                    if (state.showPausedAt !== null) {
+                        showPausedTime += (now - state.showPausedAt);
+                    }
+
+                    set({
+                        isPaused: false,
+                        showPausedAt: null,
+                        showPausedTime
+                    });
+
+                    import('../services/AudioEngine').then(({ AudioEngine }) => {
+                        AudioEngine.resumeAll();
+                    });
+                }
+            },
+
+            resetShowTimer: () => {
+                console.log('[Store] Resetting show timer');
+                set({ showStartTime: null });
             },
 
             logs: [],
@@ -346,6 +475,22 @@ export const useAppStore = create<AppState>()(
                 };
             }),
             clearLogs: () => set({ logs: [] }),
+
+            toasts: [],
+            addToast: (message, type = 'info', duration = 3000) => set((state) => {
+                // Check if toasts are enabled in settings (default to true if undefined)
+                if (state.settings.showToasts === false) return {};
+
+                return {
+                    toasts: [
+                        ...state.toasts,
+                        { id: uuidv4(), message, type, duration }
+                    ]
+                };
+            }),
+            dismissToast: (id) => set((state) => ({
+                toasts: state.toasts.filter(t => t.id !== id)
+            })),
         }),
         {
             name: 'maestro-store',

@@ -1,19 +1,41 @@
 import React from 'react';
 import { useAppStore } from '../../store/useAppStore';
-import { Square } from 'lucide-react';
+import { Square, Pause, Play } from 'lucide-react';
 
 export const TransportControls: React.FC = () => {
-    const { stopAll } = useAppStore();
+    const { panic, isPaused, stopAll, resetShowTimer } = useAppStore();
+
+    const handleClick = (e: React.MouseEvent) => {
+        if (e.shiftKey) {
+            stopAll();
+            resetShowTimer();
+        } else {
+            panic();
+        }
+    };
 
     return (
         <button
-            onClick={stopAll}
-            className="w-full aspect-square bg-slate-900/50 hover:bg-red-950/30 text-slate-500 hover:text-red-500 rounded-2xl font-bold flex flex-col items-center justify-center gap-1.5 transition-colors border border-slate-800 hover:border-red-900/50 group shadow-lg"
-            title="Panic / Stop All (Esc)"
+            onClick={handleClick}
+            className={`w-full aspect-square rounded-2xl font-bold flex flex-col items-center justify-center gap-1.5 transition-colors border group shadow-lg
+                ${isPaused
+                    ? 'bg-emerald-900/30 hover:bg-emerald-900/50 text-emerald-500 border-emerald-900/50'
+                    : 'bg-slate-900/50 hover:bg-amber-950/30 text-slate-500 hover:text-amber-500 border-slate-800 hover:border-amber-900/50'
+                }`}
+            title={isPaused ? "Resume (Esc) - Shift+Click to Stop" : "Pause (Esc) - Shift+Click to Stop"}
         >
-            <Square size={20} fill="currentColor" className="opacity-50 group-hover:opacity-100 transition-opacity" />
-            <span className="text-[10px] tracking-widest uppercase font-black">Panic</span>
-            <span className="text-[9px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-500 group-hover:text-red-400/60 font-mono">ESC</span>
+            {isPaused ? (
+                <>
+                    <Play size={20} fill="currentColor" className="opacity-100 transition-opacity" />
+                    <span className="text-[10px] tracking-widest uppercase font-black">Resume</span>
+                </>
+            ) : (
+                <>
+                    <Pause size={20} fill="currentColor" className="opacity-50 group-hover:opacity-100 transition-opacity" />
+                    <span className="text-[10px] tracking-widest uppercase font-black">Pause</span>
+                </>
+            )}
+            <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono ${isPaused ? 'bg-emerald-900/50 text-emerald-200' : 'bg-slate-800 text-slate-500 group-hover:text-amber-400/60'}`}>ESC</span>
         </button>
     );
 };
