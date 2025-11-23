@@ -10,6 +10,10 @@ export const initializeMockChannels = () => {
         { number: 4, name: 'Joseph', faderLevel: 0.3, muted: false },
         { number: 5, name: 'Roman-Angel', faderLevel: 0.2, muted: false },
         { number: 6, name: 'Soloist 1', faderLevel: 0.0, muted: false },
+        { number: 7, name: 'Soloist 2', faderLevel: 0.0, muted: false },
+        { number: 8, name: 'Shepard 1', faderLevel: 0.0, muted: false },
+        { number: 9, name: 'Shepard 2', faderLevel: 0.0, muted: false },
+        { number: 10, name: 'Shepard 3', faderLevel: 0.0, muted: false },
     ];
 
     useAppStore.getState().setX32Channels(mockChannels);
