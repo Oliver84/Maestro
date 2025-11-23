@@ -9,7 +9,6 @@ export const CueList: React.FC = () => {
     const [isDraggingOverList, setIsDraggingOverList] = useState(false);
     const [dragOverCueId, setDragOverCueId] = useState<string | null>(null);
     const [editingCueId, setEditingCueId] = useState<string | null>(null);
-    const [editingSnippetId, setEditingSnippetId] = useState<string | null>(null);
     const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
     const [playingCueIds, setPlayingCueIds] = useState<Set<string>>(new Set());
     const cueRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
@@ -174,16 +173,9 @@ export const CueList: React.FC = () => {
     // Prevent cue firing when clicking on inputs
     const stopProp = (e: React.MouseEvent) => e.stopPropagation();
 
-    // Handle Row Click: Selects the cue (for Go logic) and fires if needed (double click? or just separate selection)
-    // Standard Show Control: Click selects (Blue). Spacebar Fires (Green).
-    // But we also kept the "Click to Fire" logic in previous steps.
-    // Let's make Click -> Select. Double Click -> Fire? Or keep single click fire but update selection?
-    // The user requested "Navigate up/down... space bar to go".
-    // Usually, clicking a row should SELECT it (Next).
+    // Handle Row Click: Selects the cue (for Go logic)
     const handleRowClick = (id: string) => {
-        if (!editingCueId && !editingSnippetId && !editingSceneId) {
-            selectCue(id);
-        }
+        selectCue(id);
     };
 
     return (
@@ -207,21 +199,22 @@ export const CueList: React.FC = () => {
                         const isSelected = selectedCueId === cue.id; // Selected/Next
                         const isDragTarget = dragOverCueId === cue.id;
                         const isEditingTitle = editingCueId === cue.id;
-                        const isEditingSnippet = editingSnippetId === cue.id;
                         const isEditingScene = editingSceneId === cue.id;
 
                         // Logic for type display
                         let type = 'CUE';
                         const hasSnippet = cue.snippetId !== null && cue.snippetId !== undefined;
 
-                        if (cue.audioFilePath && hasSnippet) type = 'MIXED';
-                        else if (cue.audioFilePath) type = 'SONG';
-                        else if (hasSnippet) type = 'SNIPPET';
+                        if (cue.audioFilePath) {
+                            type = 'SONG';
+                        } else if (hasSnippet || (cue.channelState && Object.keys(cue.channelState).length > 0)) {
+                            // If snippet or channel state exists, it affects mixer
+                            type = 'SCENE';
+                        }
 
                         const typeColor = type === 'SONG' ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' :
-                            type === 'SNIPPET' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' :
-                                type === 'MIXED' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' :
-                                    'bg-slate-700/20 text-slate-400 border-slate-700/30';
+                            type === 'SCENE' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' :
+                                'bg-slate-700/20 text-slate-400 border-slate-700/30';
 
                         const isOverlap = cue.playbackMode === 'OVERLAP';
 
@@ -250,10 +243,11 @@ export const CueList: React.FC = () => {
                                 <td className="px-3 py-2 font-mono text-slate-400 group-hover:text-amber-400 text-xl font-black text-center transition-colors">
                                     {cue.sequence}
                                 </td>
-                                <td className="px-4 py-2" onClick={stopProp}>
+                                <td className="px-4 py-2">
                                     {isEditingTitle ? (
                                         <input
                                             autoFocus
+                                            onClick={stopProp}
                                             className="bg-slate-950 text-white font-bold text-base px-2 py-0.5 rounded border border-emerald-500 outline-none w-full"
                                             value={cue.title}
                                             onChange={(e) => updateCue(cue.id, { title: e.target.value })}
@@ -277,6 +271,7 @@ export const CueList: React.FC = () => {
                                             {isEditingScene ? (
                                                 <input
                                                     autoFocus
+                                                    onClick={stopProp}
                                                     className="bg-slate-950 text-slate-300 px-1 py-0.5 rounded border border-emerald-500 outline-none w-32"
                                                     placeholder="Scene Name"
                                                     value={cue.scene || ''}
@@ -312,31 +307,6 @@ export const CueList: React.FC = () => {
                                                     {isOverlap ? <Layers size={11} /> : <StopCircle size={11} />}
                                                     <span>{isOverlap ? 'LAYER' : 'STOP & GO'}</span>
                                                 </button>
-
-                                                {/* Snippet - Inline */}
-                                                {isEditingSnippet ? (
-                                                    <input
-                                                        autoFocus
-                                                        type="number"
-                                                        className="bg-slate-950 text-white px-2 py-0.5 rounded border border-emerald-500 outline-none w-12 text-xs text-center"
-                                                        placeholder="#"
-                                                        value={cue.snippetId ?? ''}
-                                                        onChange={(e) => {
-                                                            const val = e.target.value;
-                                                            updateCue(cue.id, { snippetId: val === '' ? null : parseInt(val) });
-                                                        }}
-                                                        onBlur={() => setEditingSnippetId(null)}
-                                                        onKeyDown={(e) => { if (e.key === 'Enter') setEditingSnippetId(null); }}
-                                                    />
-                                                ) : (
-                                                    <div
-                                                        className="text-xs text-slate-400 italic cursor-text hover:text-emerald-400 border border-transparent hover:border-slate-700 rounded px-2 py-0.5 w-12 text-center"
-                                                        onClick={() => setEditingSnippetId(cue.id)}
-                                                        title="Snippet ID"
-                                                    >
-                                                        {cue.snippetId !== null && cue.snippetId !== undefined ? `#${cue.snippetId}` : '-'}
-                                                    </div>
-                                                )}
 
                                                 {/* Type Badge */}
                                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${typeColor} w-[60px] text-center`}>

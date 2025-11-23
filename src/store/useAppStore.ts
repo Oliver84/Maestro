@@ -18,6 +18,7 @@ export interface Cue {
     scene?: string;
     snippetId?: number | null;
     playbackMode?: 'STOP_AND_GO' | 'OVERLAP';
+    channelState?: Record<number, { faderLevel: number; muted: boolean }>;
 }
 
 export interface X32Channel {
@@ -272,6 +273,28 @@ export const useAppStore = create<AppState>()(
                     // Send X32 Snippet if present
                     if (cue.snippetId !== null && cue.snippetId !== undefined) {
                         oscClient.sendCustomCommand(`/action/gosnippet ${cue.snippetId}`);
+                    }
+
+                    // Apply saved channel state if present
+                    if (cue.channelState) {
+                        // Optimistically update store to reflect changes in UI immediately
+                        set((state) => ({
+                            x32Channels: state.x32Channels.map(ch => {
+                                const savedState = cue.channelState![ch.number];
+                                if (savedState) {
+                                    return { ...ch, faderLevel: savedState.faderLevel, muted: savedState.muted };
+                                }
+                                return ch;
+                            })
+                        }));
+
+                        Object.entries(cue.channelState).forEach(([channelNumStr, state]) => {
+                            const channelNum = parseInt(channelNumStr);
+                            if (!isNaN(channelNum)) {
+                                oscClient.setChannelFader(channelNum, state.faderLevel);
+                                oscClient.setChannelMute(channelNum, state.muted);
+                            }
+                        });
                     }
                 });
             },
